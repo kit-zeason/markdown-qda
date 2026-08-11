@@ -1,0 +1,8 @@
+node_modules/
+out/
+*.vsix
+
+# pi 会话锁文件
+.pi-loop.json.lock
+# local-history 扩展运行时目录
+.lh/

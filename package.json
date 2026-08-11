@@ -1,0 +1,62 @@
+{
+    "name": "qda-blockref",
+    "displayName": "QDA Block Reference",
+    "description": "为选中段落生成 Foam/Obsidian 兼容的块 ID (^id)，并复制块引用 [[note#^id]] 到剪贴板，方便粘贴到编码文档。",
+    "version": "0.0.1",
+    "publisher": "qda-local",
+    "engines": {
+        "vscode": "^1.80.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "keywords": [
+        "markdown",
+        "foam",
+        "obsidian",
+        "block reference",
+        "block id",
+        "qualitative",
+        "qda"
+    ],
+    "license": "MIT",
+    "main": "./out/extension.js",
+    "activationEvents": [
+        "onCommand:qda.blockRef.copy"
+    ],
+    "contributes": {
+        "commands": [
+            {
+                "command": "qda.blockRef.copy",
+                "title": "QDA: 复制块引用 (Copy Block Reference)"
+            }
+        ],
+        "keybindings": [
+            {
+                "command": "qda.blockRef.copy",
+                "key": "ctrl+alt+b",
+                "when": "editorTextFocus && editorLangId == markdown"
+            }
+        ],
+        "menus": {
+            "editor/context": [
+                {
+                    "command": "qda.blockRef.copy",
+                    "when": "editorLangId == markdown",
+                    "group": "navigation"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "compile": "tsc -p ./",
+        "vscode:prepublish": "npm run compile",
+        "package": "npm run compile && npx @vscode/vsce package --allow-missing-repository"
+    },
+    "devDependencies": {
+        "@types/node": "^26.2.0",
+        "@types/vscode": "^1.80.0",
+        "@vscode/vsce": "^2.24.0",
+        "typescript": "^5.4.0"
+    }
+}
