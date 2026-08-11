@@ -1,0 +1,11 @@
+# 统一换行符为 LF，保证跨平台一致性（Windows 检出仍可用 CRLF 工作副本）
+* text=auto
+
+*.ts    text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.gitignore      text eol=lf
+*.vscodeignore   text eol=lf
