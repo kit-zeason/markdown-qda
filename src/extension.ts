@@ -1,61 +1,258 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
+import * as vscode from "vscode";
+import * as path from "path";
+import {
+	blockRefString,
+	checkSource,
+	ensureBlockId,
+	targetLine,
+} from "./blockRef";
+import { LibraryProvider, registerLibraryCommands } from "./library";
+import {
+	CodeManagerProvider,
+	registerCodeManagerCommands,
+} from "./codeManager";
 
-// Obsidian 手动块 ID 允许字母、数字、连字符（不允许下划线/空格）
-const BLOCK_ID_RE = /\s+\^([a-zA-Z0-9-]+)\s*$/;
+const EXCLUDE_GLOB =
+	"{**/node_modules/**,**/.git/**,**/.obsidian/**,**/.lh/**}";
 
 export function activate(context: vscode.ExtensionContext) {
-    context.subscriptions.push(vscode.commands.registerCommand(
-        'qda.blockRef.copy', async () => {
-            const editor = vscode.window.activeTextEditor;
-            if (!editor) {
-                return;
-            }
-            const doc = editor.document;
-            if (doc.languageId !== 'markdown') {
-                vscode.window.showWarningMessage('QDA Block Reference 仅支持 Markdown 文件');
-                return;
-            }
+	// ---- 侧边栏「块引用库」 ----
+	const library = new LibraryProvider(context);
+	const libraryView = vscode.window.createTreeView("mdqda.blockRefLibrary", {
+		treeDataProvider: library,
+		showCollapseAll: true,
+	});
+	context.subscriptions.push(libraryView);
+	registerLibraryCommands(context, library);
 
-            // 无选区时以光标所在行为块；有选区时以选区末行为块
-            const line = doc.lineAt(editor.selection.isEmpty
-                ? editor.selection.active.line
-                : editor.selection.end.line);
+	// ---- 侧边栏「编码管理」 ----
+	const codeManager = new CodeManagerProvider(library);
+	const codeView = vscode.window.createTreeView("mdqda.codeManager", {
+		treeDataProvider: codeManager,
+		showCollapseAll: true,
+	});
+	context.subscriptions.push(codeView);
+	registerCodeManagerCommands(context, codeManager);
 
-            // 该行行尾已有 ^id 则复用（"有码则跳过"）
-            const existing = line.text.match(BLOCK_ID_RE);
-            let id: string;
-            if (existing) {
-                id = existing[1];
-            } else {
-                id = randomId(6);
-                // 文件内查重，避免与已有块 ID 冲突（Obsidian 文件内重复 ID 不可靠）
-                const full = doc.getText();
-                while (full.includes('^' + id)) {
-                    id = randomId(6);
-                }
-                await editor.edit((e) => e.insert(
-                    new vscode.Position(line.lineNumber, line.text.length),
-                    ' ^' + id
-                ));
-            }
+	// 编码目录配置变化时刷新
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration((e) => {
+			if (e.affectsConfiguration("mdqda.codingFolder")) {
+				void codeManager.scan();
+			}
+		}),
+	);
 
-            const note = path.basename(doc.fileName, '.md');
-            const ref = `[[${note}#^${id}]]`;
-            await vscode.env.clipboard.writeText(ref);
-            vscode.window.showInformationMessage(`已复制块引用：${ref}`);
-        })
-    );
+	// 库内容随 Markdown 文件变化自动刷新
+	const rescan = debounce(() => {
+		void library.scan();
+	}, 500);
+	context.subscriptions.push(
+		vscode.workspace.onDidSaveTextDocument((d) => {
+			if (d.languageId === "markdown") {
+				rescan();
+			}
+		}),
+		vscode.workspace.onDidCreateFiles(() => rescan()),
+		vscode.workspace.onDidDeleteFiles(() => rescan()),
+		vscode.workspace.onDidRenameFiles((e) => {
+			library.onRename(e);
+			rescan();
+		}),
+	);
+	void library.scan();
+
+	// ---- 复制块引用（仅复制到剪贴板） ----
+	const copy = async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || !checkSource(editor)) {
+			return;
+		}
+		const id = await ensureBlockId(editor, targetLine(editor));
+		const ref = blockRefString(editor.document.fileName, id);
+		await vscode.env.clipboard.writeText(ref);
+		vscode.window.showInformationMessage(
+			vscode.l10n.t("Copied block reference: {0}", ref),
+		);
+	};
+
+	// ---- 复制块引用至…（默认 Ctrl+Alt+B）：复制后选择目标文档并追加到末尾 ----
+	const copyTo = async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || !checkSource(editor)) {
+			return;
+		}
+		const id = await ensureBlockId(editor, targetLine(editor));
+		const ref = blockRefString(editor.document.fileName, id);
+		await vscode.env.clipboard.writeText(ref);
+
+		const target = await pickMarkdownFile(editor.document.uri);
+		if (!target) {
+			return; // 用户取消
+		}
+		await appendRefToFile(target, ref);
+		vscode.window.showInformationMessage(
+			vscode.l10n.t(
+				"Copied block reference: {0}, appended to {1}",
+				ref,
+				vscode.workspace.asRelativePath(target, false),
+			),
+		);
+		rescan();
+	};
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("mdqda.blockRef.copy", copy),
+		vscode.commands.registerCommand("mdqda.blockRef.copyTo", copyTo),
+	);
 }
 
-// 与 Obsidian 自动生成的块 ID 一致：6 位，字符集 a-z0-9（36 进制）
-function randomId(len: number): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let s = '';
-    for (let i = 0; i < len; i++) {
-        s += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return s;
+interface FilePickItem extends vscode.QuickPickItem {
+	uri?: vscode.Uri;
+	createPath?: string;
 }
 
-export function deactivate() { }
+// 检索框：列出工作区 Markdown 文档；输入不存在的新路径（如 编码-压力.md）可创建
+function pickMarkdownFile(source: vscode.Uri): Promise<vscode.Uri | undefined> {
+	return new Promise((resolve) => {
+		const roots = vscode.workspace.workspaceFolders;
+		if (!roots || roots.length === 0) {
+			vscode.window.showWarningMessage(
+				vscode.l10n.t(
+					"No workspace folder is open; cannot choose a target document",
+				),
+			);
+			resolve(undefined);
+			return;
+		}
+		void (async () => {
+			const files = await vscode.workspace.findFiles(
+				"**/*.md",
+				EXCLUDE_GLOB,
+				5000,
+			);
+			const baseItems: FilePickItem[] = files
+				.filter((f) => f.toString() !== source.toString())
+				.map((f) => ({
+					label: path.basename(f.fsPath),
+					description: vscode.workspace.asRelativePath(f, false),
+					uri: f,
+				}))
+				.sort((a, b) =>
+					(a.description ?? "").localeCompare(b.description ?? ""),
+				);
+
+			const qp = vscode.window.createQuickPick<FilePickItem>();
+			qp.title = vscode.l10n.t("QDA: Copy Block Reference To…");
+			qp.placeholder = vscode.l10n.t(
+				"Select a Markdown document, or type a new path (e.g. codes-stress.md) to create",
+			);
+			qp.matchOnDescription = true;
+			qp.items = baseItems;
+
+			qp.onDidChangeValue((value) => {
+				const v = value.trim();
+				if (!v) {
+					qp.items = baseItems;
+					return;
+				}
+				const withExt = v.toLowerCase().endsWith(".md") ? v : v + ".md";
+				if (
+					baseItems.some(
+						(i) => i.description === withExt || i.description === v,
+					)
+				) {
+					qp.items = baseItems;
+					return;
+				}
+				qp.items = [
+					{
+						label: "$(add) " + vscode.l10n.t("Create new file {0}", withExt),
+						description: vscode.l10n.t(
+							"This path does not exist; press Enter to create it",
+						),
+						createPath: withExt,
+					},
+					...baseItems,
+				];
+			});
+
+			qp.onDidAccept(() => {
+				const sel = qp.selectedItems[0];
+				if (!sel) {
+					return;
+				}
+				qp.hide();
+				if (sel.createPath) {
+					resolve(
+						vscode.Uri.joinPath(roots[0].uri, ...sel.createPath.split("/")),
+					);
+				} else {
+					resolve(sel.uri);
+				}
+			});
+			qp.onDidHide(() => resolve(undefined));
+			qp.show();
+		})();
+	});
+}
+
+// 把裸引用 [[文件#^id]] 追加到目标文档末尾（文件不存在则创建）
+async function appendRefToFile(target: vscode.Uri, ref: string): Promise<void> {
+	let exists = true;
+	try {
+		await vscode.workspace.fs.stat(target);
+	} catch {
+		exists = false;
+	}
+
+	if (!exists) {
+		try {
+			await vscode.workspace.fs.createDirectory(
+				vscode.Uri.joinPath(target, ".."),
+			);
+		} catch {
+			// 目录已存在时忽略
+		}
+		await vscode.workspace.fs.writeFile(
+			target,
+			Buffer.from(ref + "\n", "utf8"),
+		);
+	} else {
+		const doc = await vscode.workspace.openTextDocument(target);
+		const eol = doc.eol === vscode.EndOfLine.CRLF ? "\r\n" : "\n";
+		const last = doc.lineAt(doc.lineCount - 1);
+		let insertText: string;
+		if (doc.lineCount === 1 && last.text === "") {
+			insertText = ref; // 空文件：直接写入
+		} else if (last.text === "") {
+			insertText = ref + eol; // 文件末尾已有换行：补在末尾行
+		} else {
+			insertText = eol + ref + eol; // 末尾无换行：先换行再追加
+		}
+		const wsEdit = new vscode.WorkspaceEdit();
+		wsEdit.insert(target, last.range.end, insertText);
+		await vscode.workspace.applyEdit(wsEdit);
+	}
+
+	const doc = await vscode.workspace.openTextDocument(target);
+	await vscode.window.showTextDocument(doc, {
+		preview: true,
+		preserveFocus: true,
+	});
+}
+
+function debounce(fn: () => void, ms: number): () => void {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	return () => {
+		if (timer !== undefined) {
+			clearTimeout(timer);
+		}
+		timer = setTimeout(() => {
+			timer = undefined;
+			fn();
+		}, ms);
+	};
+}
+
+export function deactivate() {}

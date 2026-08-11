@@ -1,9 +1,11 @@
 {
-    "name": "qda-blockref",
-    "displayName": "QDA Block Reference",
-    "description": "为选中段落生成 Foam/Obsidian 兼容的块 ID (^id)，并复制块引用 [[note#^id]] 到剪贴板，方便粘贴到编码文档。",
-    "version": "0.0.1",
-    "publisher": "qda-local",
+    "name": "markdown-qda",
+    "displayName": "Markdown QDA",
+    "description": "%mdqda.description%",
+    "version": "0.3.1",
+    "publisher": "ZeasonGuo",
+    "author": "GUO Zeason",
+    "l10n": "./l10n",
     "engines": {
         "vscode": "^1.80.0"
     },
@@ -22,36 +24,348 @@
     "license": "MIT",
     "main": "./out/extension.js",
     "activationEvents": [
-        "onCommand:qda.blockRef.copy"
+        "onCommand:mdqda.blockRef.copy",
+        "onCommand:mdqda.blockRef.copyTo",
+        "onCommand:mdqda.blockRefLibrary.focus",
+        "onCommand:mdqda.blockRefLibrary.refresh",
+        "onCommand:mdqda.blockRefLibrary.newFolder",
+        "onCommand:mdqda.blockRefLibrary.renameFolder",
+        "onCommand:mdqda.blockRefLibrary.deleteFolder",
+        "onCommand:mdqda.blockRefLibrary.moveSnippet",
+        "onCommand:mdqda.blockRefLibrary.copySnippetRef",
+        "onCommand:mdqda.blockRefLibrary.revealSnippet",
+        "onCommand:mdqda.blockRefLibrary.deleteSnippet",
+        "onView:mdqda.blockRefLibrary",
+        "onCommand:mdqda.codeManager.refresh",
+        "onCommand:mdqda.codeManager.selectFolder",
+        "onCommand:mdqda.codeManager.newCode",
+        "onCommand:mdqda.codeManager.openCodeFile",
+        "onCommand:mdqda.codeManager.setParent",
+        "onCommand:mdqda.codeManager.renameCode",
+        "onCommand:mdqda.codeManager.deleteCode",
+        "onCommand:mdqda.codeManager.mergeCodes",
+        "onCommand:mdqda.codeManager.revealSegment",
+        "onCommand:mdqda.codeManager.copySegmentRef",
+        "onCommand:mdqda.codeManager.exportCodebook",
+        "onView:mdqda.codeManager"
     ],
     "contributes": {
         "commands": [
             {
-                "command": "qda.blockRef.copy",
-                "title": "QDA: 复制块引用 (Copy Block Reference)"
+                "command": "mdqda.blockRef.copyTo",
+                "title": "%mdqda.command.blockRef.copyTo%"
+            },
+            {
+                "command": "mdqda.blockRef.copy",
+                "title": "%mdqda.command.blockRef.copy%"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.focus",
+                "title": "%mdqda.command.blockRefLibrary.focus%",
+                "icon": "$(library)"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.refresh",
+                "title": "%mdqda.command.blockRefLibrary.refresh%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.newFolder",
+                "title": "%mdqda.command.blockRefLibrary.newFolder%",
+                "icon": "$(new-folder)"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.renameFolder",
+                "title": "%mdqda.command.blockRefLibrary.renameFolder%"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.deleteFolder",
+                "title": "%mdqda.command.blockRefLibrary.deleteFolder%"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.moveSnippet",
+                "title": "%mdqda.command.blockRefLibrary.moveSnippet%"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.copySnippetRef",
+                "title": "%mdqda.command.blockRefLibrary.copySnippetRef%"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.revealSnippet",
+                "title": "%mdqda.command.blockRefLibrary.revealSnippet%"
+            },
+            {
+                "command": "mdqda.blockRefLibrary.deleteSnippet",
+                "title": "%mdqda.command.blockRefLibrary.deleteSnippet%"
+            },
+            {
+                "command": "mdqda.codeManager.refresh",
+                "title": "%mdqda.command.codeManager.refresh%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "mdqda.codeManager.selectFolder",
+                "title": "%mdqda.command.codeManager.selectFolder%",
+                "icon": "$(folder-opened)"
+            },
+            {
+                "command": "mdqda.codeManager.newCode",
+                "title": "%mdqda.command.codeManager.newCode%",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "mdqda.codeManager.openCodeFile",
+                "title": "%mdqda.command.codeManager.openCodeFile%"
+            },
+            {
+                "command": "mdqda.codeManager.setParent",
+                "title": "%mdqda.command.codeManager.setParent%"
+            },
+            {
+                "command": "mdqda.codeManager.renameCode",
+                "title": "%mdqda.command.codeManager.renameCode%"
+            },
+            {
+                "command": "mdqda.codeManager.deleteCode",
+                "title": "%mdqda.command.codeManager.deleteCode%"
+            },
+            {
+                "command": "mdqda.codeManager.mergeCodes",
+                "title": "%mdqda.command.codeManager.mergeCodes%"
+            },
+            {
+                "command": "mdqda.codeManager.revealSegment",
+                "title": "%mdqda.command.codeManager.revealSegment%"
+            },
+            {
+                "command": "mdqda.codeManager.copySegmentRef",
+                "title": "%mdqda.command.codeManager.copySegmentRef%"
+            },
+            {
+                "command": "mdqda.codeManager.exportCodebook",
+                "title": "%mdqda.command.codeManager.exportCodebook%",
+                "icon": "$(export)"
             }
         ],
         "keybindings": [
             {
-                "command": "qda.blockRef.copy",
+                "command": "mdqda.blockRef.copyTo",
                 "key": "ctrl+alt+b",
                 "when": "editorTextFocus && editorLangId == markdown"
             }
         ],
         "menus": {
+            "commandPalette": [
+                {
+                    "command": "mdqda.blockRefLibrary.renameFolder",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.deleteFolder",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.moveSnippet",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.copySnippetRef",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.revealSnippet",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.deleteSnippet",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.renameCode",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.deleteCode",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.mergeCodes",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.openCodeFile",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.setParent",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.revealSegment",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.copySegmentRef",
+                    "when": "false"
+                }
+            ],
             "editor/context": [
                 {
-                    "command": "qda.blockRef.copy",
+                    "command": "mdqda.blockRef.copyTo",
                     "when": "editorLangId == markdown",
-                    "group": "navigation"
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "mdqda.blockRef.copy",
+                    "when": "editorLangId == markdown",
+                    "group": "navigation@2"
+                }
+            ],
+            "view/title": [
+                {
+                    "command": "mdqda.blockRefLibrary.newFolder",
+                    "when": "view == mdqda.blockRefLibrary",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.refresh",
+                    "when": "view == mdqda.blockRefLibrary",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "mdqda.codeManager.selectFolder",
+                    "when": "view == mdqda.codeManager",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "mdqda.codeManager.newCode",
+                    "when": "view == mdqda.codeManager",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "mdqda.codeManager.exportCodebook",
+                    "when": "view == mdqda.codeManager",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "mdqda.codeManager.refresh",
+                    "when": "view == mdqda.codeManager",
+                    "group": "navigation@4"
+                }
+            ],
+            "view/item/context": [
+                {
+                    "command": "mdqda.blockRefLibrary.renameFolder",
+                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaFolder",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.deleteFolder",
+                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaFolder",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.revealSnippet",
+                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaSnippet",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.copySnippetRef",
+                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaSnippet",
+                    "group": "inline@2"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.moveSnippet",
+                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaSnippet",
+                    "group": "1_move@1"
+                },
+                {
+                    "command": "mdqda.blockRefLibrary.deleteSnippet",
+                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaSnippet",
+                    "group": "1_move@2"
+                },
+                {
+                    "command": "mdqda.codeManager.renameCode",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "1_merge@2"
+                },
+                {
+                    "command": "mdqda.codeManager.deleteCode",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "1_merge@3"
+                },
+                {
+                    "command": "mdqda.codeManager.mergeCodes",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "1_merge@1"
+                },
+                {
+                    "command": "mdqda.codeManager.setParent",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "mdqda.codeManager.revealSegment",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCodeSegment",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "mdqda.codeManager.copySegmentRef",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCodeSegment",
+                    "group": "inline@2"
                 }
             ]
+        },
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "mdqda",
+                    "title": "QDA",
+                    "icon": "media/markdown-qda.svg"
+                }
+            ]
+        },
+        "views": {
+            "mdqda": [
+                {
+                    "id": "mdqda.blockRefLibrary",
+                    "name": "%mdqda.view.blockRefLibrary.name%",
+                    "icon": "media/markdown-qda.svg"
+                },
+                {
+                    "id": "mdqda.codeManager",
+                    "name": "%mdqda.view.codeManager.name%",
+                    "icon": "media/markdown-qda.svg"
+                }
+            ]
+        },
+        "viewsWelcome": [
+            {
+                "view": "mdqda.blockRefLibrary",
+                "contents": "%mdqda.welcome.blockRefLibrary%",
+                "when": "view == mdqda.blockRefLibrary && !mdqda.blockRefLibrary.hasRefs"
+            },
+            {
+                "view": "mdqda.codeManager",
+                "contents": "%mdqda.welcome.codeManager%",
+                "when": "view == mdqda.codeManager && !mdqda.codeManager.hasCodes"
+            }
+        ],
+        "configuration": {
+            "title": "%mdqda.config.title%",
+            "properties": {
+                "mdqda.codingFolder": {
+                    "type": "string",
+                    "default": "",
+                    "description": "%mdqda.config.codingFolder%"
+                }
+            }
         }
     },
     "scripts": {
         "compile": "tsc -p ./",
         "vscode:prepublish": "npm run compile",
-        "package": "npm run compile && npx @vscode/vsce package --allow-missing-repository"
+        "package": "npm run compile && npx @vscode/vsce package --allow-missing-repository --out releases"
     },
     "devDependencies": {
         "@types/node": "^26.2.0",

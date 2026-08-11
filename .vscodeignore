@@ -1,6 +1,12 @@
 .vscode/**
+.pi/**
+.lh/**
 src/**
 node_modules/**
 .gitignore
 tsconfig.json
 **/*.map
+.pi-loop.json.lock
+AGENTS.md
+releases/**
+测试项目/**
