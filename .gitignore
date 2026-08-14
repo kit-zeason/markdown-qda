@@ -6,3 +6,17 @@ out/
 .pi-loop.json.lock
 # local-history 扩展运行时目录
 .lh/
+
+# ── 本地材料，不上传 GitHub ──
+# 本地测试项目（含示例编码材料）
+测试项目/
+# 架构文档与构想草稿
+/docs/
+# agent 指令文件（保留本地，不随仓库分发）
+AGENTS.md
+# pi 工具本地数据
+.pi/
+# 打包产物目录（*.vsix 已忽略，此处兜底）
+releases/
+# 本地工作区设置（指向被忽略的测试目录）
+.vscode/settings.json

@@ -1,5 +1,7 @@
 // 纯解析逻辑：不依赖 vscode，便于独立测试
 
+import * as yaml from "js-yaml";
+
 // Obsidian 手动块 ID 允许字母、数字、连字符（不允许下划线/空格）
 export const BLOCK_ID_RE = /\s+\^([a-zA-Z0-9-]+)\s*$/;
 
@@ -41,19 +43,40 @@ export function collectBlockRefs(
 	return refs;
 }
 
-// ---- 编码文件解析（纯逻辑，不依赖 vscode） ----
+// ---- 实体文件解析（纯逻辑，不依赖 vscode） ----
 
-// 解析文件头 YAML frontmatter，取 definition/parent 字段；无 frontmatter 时 bodyStart = 0
-export function parseFrontmatter(content: string): {
+// frontmatter 解析结果：tags 为实体类型标签（code/theme），definition/parent 为既有字段
+export interface ParsedFrontmatter {
+	tags: string[];
 	definition?: string;
 	parent?: string;
 	bodyStart: number;
-} {
-	const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
-	if (!m) {
-		return { bodyStart: 0 };
+}
+
+// 把 YAML tags 归一化为数组：支持内联数组 [a, b]、YAML 列表、逗号分隔字符串（Obsidian 三种写法）
+function normalizeTags(v: unknown): string[] {
+	if (typeof v === "string") {
+		return v
+			.split(",")
+			.map((t) => t.trim())
+			.filter(Boolean);
 	}
-	const fmLines = m[1].split("\n");
+	if (Array.isArray(v)) {
+		return v.filter((t): t is string => typeof t === "string");
+	}
+	return [];
+}
+
+function strField(v: unknown): string | undefined {
+	return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+// 行级回退：frontmatter 不是合法 YAML 时只取平铺的 definition/parent，tags 视为空
+function lineFallback(fmText: string): {
+	definition?: string;
+	parent?: string;
+} {
+	const fmLines = fmText.split("\n");
 	const line = (field: string) =>
 		fmLines.find((l) => {
 			const t = l.trim();
@@ -64,7 +87,32 @@ export function parseFrontmatter(content: string): {
 	return {
 		definition: def?.replace(/^definition:\s*/i, "").trim(),
 		parent: parent?.replace(/^parent:\s*/i, "").trim() || undefined,
-		bodyStart: m[0].length,
+	};
+}
+
+// 解析文件头 YAML frontmatter：用 js-yaml 完整解析（tags/definition/parent）；
+// 无 frontmatter 或非法 YAML 时回退到行级解析，bodyStart 仍正确标记正文起点
+export function parseFrontmatter(content: string): ParsedFrontmatter {
+	const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+	if (!m) {
+		return { tags: [], bodyStart: 0 };
+	}
+	const bodyStart = m[0].length;
+	let data: unknown;
+	try {
+		data = yaml.load(m[1]);
+	} catch {
+		return { tags: [], ...lineFallback(m[1]), bodyStart };
+	}
+	const obj =
+		data && typeof data === "object" && !Array.isArray(data)
+			? (data as Record<string, unknown>)
+			: {};
+	return {
+		tags: normalizeTags(obj.tags),
+		definition: strField(obj.definition),
+		parent: strField(obj.parent),
+		bodyStart,
 	};
 }
 

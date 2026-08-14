@@ -27,5 +27,15 @@
     "mdqda.welcome.blockRefLibrary": "No block references found in the workspace Markdown files.\n\nUse **QDA: Copy Block Reference** (`Ctrl+Alt+B`) on any Markdown paragraph and this view will list all text snippets that have a block ID. Right-click a snippet to organize it into a folder.",
     "mdqda.welcome.codeManager": "The coding folder currently has no Markdown files.\n\nA code is a .md file in the coding folder whose content is a list of block references (append with `Ctrl+Alt+B`).\n\nClick the folder icon in the view title bar to **select the coding folder** (defaults to the workspace root), or click + to create a new code.",
     "mdqda.config.title": "QDA Block Reference",
-    "mdqda.config.codingFolder": "Coding folder scanned by the Code Manager (relative path from the workspace root; empty = workspace root)"
+    "mdqda.config.codingFolder": "Managed folder for QDA entities (codes and themes). All Markdown files inside must declare `tags: [code]` or `tags: [theme]` in their YAML frontmatter; unmarked files are flagged. Relative path from the workspace root; leave empty for the workspace root.",
+    "mdqda.command.codeManager.markAsCode": "QDA: Mark as Code",
+    "mdqda.command.codeManager.markAsTheme": "QDA: Mark as Theme",
+    "mdqda.command.themeManager.refresh": "QDA: Refresh Themes",
+    "mdqda.command.themeManager.newTheme": "QDA: New Theme",
+    "mdqda.command.themeManager.setThemeParent": "QDA: Set Parent Theme…",
+    "mdqda.command.themeManager.renameTheme": "QDA: Rename Theme",
+    "mdqda.command.themeManager.deleteTheme": "QDA: Delete Theme",
+    "mdqda.view.themeManager.name": "Theme Manager",
+    "mdqda.welcome.themeManager": "No themes found. A theme is a Markdown note whose YAML frontmatter declares `tags: [theme]`.\n\nClick **QDA: New Theme** to create one, or mark an unmarked note in the Code Manager view as a theme.",
+    "mdqda.command.setupAgentWorkflow": "QDA: Setup Agent Workflow"
 }

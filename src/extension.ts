@@ -11,6 +11,11 @@ import {
 	CodeManagerProvider,
 	registerCodeManagerCommands,
 } from "./codeManager";
+import {
+	ThemeManagerProvider,
+	registerThemeManagerCommands,
+} from "./themeManager";
+import { registerAgentWorkflowCommand } from "./agentWorkflow";
 
 const EXCLUDE_GLOB =
 	"{**/node_modules/**,**/.git/**,**/.obsidian/**,**/.lh/**}";
@@ -34,11 +39,24 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(codeView);
 	registerCodeManagerCommands(context, codeManager);
 
+	// ---- 侧边栏「主题管理」 ----
+	const themeManager = new ThemeManagerProvider(library);
+	const themeView = vscode.window.createTreeView("mdqda.themeManager", {
+		treeDataProvider: themeManager,
+		showCollapseAll: true,
+	});
+	context.subscriptions.push(themeView);
+	registerThemeManagerCommands(context, themeManager);
+
+	// ---- Agent 工作流配置（AGENTS.md + 技能注入） ----
+	registerAgentWorkflowCommand(context);
+
 	// 编码目录配置变化时刷新
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration((e) => {
 			if (e.affectsConfiguration("mdqda.codingFolder")) {
 				void codeManager.scan();
+				void themeManager.scan();
 			}
 		}),
 	);

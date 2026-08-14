@@ -2,7 +2,7 @@
     "name": "markdown-qda",
     "displayName": "Markdown QDA",
     "description": "%mdqda.description%",
-    "version": "0.3.1",
+    "version": "0.4.0",
     "publisher": "ZeasonGuo",
     "author": "GUO Zeason",
     "l10n": "./l10n",
@@ -47,7 +47,16 @@
         "onCommand:mdqda.codeManager.revealSegment",
         "onCommand:mdqda.codeManager.copySegmentRef",
         "onCommand:mdqda.codeManager.exportCodebook",
-        "onView:mdqda.codeManager"
+        "onView:mdqda.codeManager",
+        "onCommand:mdqda.codeManager.markAsCode",
+        "onCommand:mdqda.codeManager.markAsTheme",
+        "onCommand:mdqda.themeManager.refresh",
+        "onCommand:mdqda.themeManager.newTheme",
+        "onCommand:mdqda.themeManager.setThemeParent",
+        "onCommand:mdqda.themeManager.renameTheme",
+        "onCommand:mdqda.themeManager.deleteTheme",
+        "onView:mdqda.themeManager",
+        "onCommand:mdqda.setupAgentWorkflow"
     ],
     "contributes": {
         "commands": [
@@ -145,6 +154,41 @@
                 "command": "mdqda.codeManager.exportCodebook",
                 "title": "%mdqda.command.codeManager.exportCodebook%",
                 "icon": "$(export)"
+            },
+            {
+                "command": "mdqda.codeManager.markAsCode",
+                "title": "%mdqda.command.codeManager.markAsCode%"
+            },
+            {
+                "command": "mdqda.codeManager.markAsTheme",
+                "title": "%mdqda.command.codeManager.markAsTheme%"
+            },
+            {
+                "command": "mdqda.themeManager.refresh",
+                "title": "%mdqda.command.themeManager.refresh%",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "mdqda.themeManager.newTheme",
+                "title": "%mdqda.command.themeManager.newTheme%",
+                "icon": "$(new-file)"
+            },
+            {
+                "command": "mdqda.themeManager.setThemeParent",
+                "title": "%mdqda.command.themeManager.setThemeParent%"
+            },
+            {
+                "command": "mdqda.themeManager.renameTheme",
+                "title": "%mdqda.command.themeManager.renameTheme%"
+            },
+            {
+                "command": "mdqda.themeManager.deleteTheme",
+                "title": "%mdqda.command.themeManager.deleteTheme%"
+            },
+            {
+                "command": "mdqda.setupAgentWorkflow",
+                "title": "%mdqda.command.setupAgentWorkflow%",
+                "icon": "$(tools)"
             }
         ],
         "keybindings": [
@@ -207,6 +251,26 @@
                 {
                     "command": "mdqda.codeManager.copySegmentRef",
                     "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.markAsCode",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.markAsTheme",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.themeManager.setThemeParent",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.themeManager.renameTheme",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.themeManager.deleteTheme",
+                    "when": "false"
                 }
             ],
             "editor/context": [
@@ -251,6 +315,16 @@
                     "command": "mdqda.codeManager.refresh",
                     "when": "view == mdqda.codeManager",
                     "group": "navigation@4"
+                },
+                {
+                    "command": "mdqda.themeManager.newTheme",
+                    "when": "view == mdqda.themeManager",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "mdqda.themeManager.refresh",
+                    "when": "view == mdqda.themeManager",
+                    "group": "navigation@2"
                 }
             ],
             "view/item/context": [
@@ -313,6 +387,31 @@
                     "command": "mdqda.codeManager.copySegmentRef",
                     "when": "view == mdqda.codeManager && viewItem == mdqdaCodeSegment",
                     "group": "inline@2"
+                },
+                {
+                    "command": "mdqda.themeManager.setThemeParent",
+                    "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
+                    "group": "inline@1"
+                },
+                {
+                    "command": "mdqda.themeManager.renameTheme",
+                    "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
+                    "group": "1_manage@1"
+                },
+                {
+                    "command": "mdqda.themeManager.deleteTheme",
+                    "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
+                    "group": "1_manage@2"
+                },
+                {
+                    "command": "mdqda.codeManager.markAsCode",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaUnmarked",
+                    "group": "1_mark@1"
+                },
+                {
+                    "command": "mdqda.codeManager.markAsTheme",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaUnmarked",
+                    "group": "1_mark@2"
                 }
             ]
         },
@@ -336,6 +435,11 @@
                     "id": "mdqda.codeManager",
                     "name": "%mdqda.view.codeManager.name%",
                     "icon": "media/markdown-qda.svg"
+                },
+                {
+                    "id": "mdqda.themeManager",
+                    "name": "%mdqda.view.themeManager.name%",
+                    "icon": "media/markdown-qda.svg"
                 }
             ]
         },
@@ -349,6 +453,11 @@
                 "view": "mdqda.codeManager",
                 "contents": "%mdqda.welcome.codeManager%",
                 "when": "view == mdqda.codeManager && !mdqda.codeManager.hasCodes"
+            },
+            {
+                "view": "mdqda.themeManager",
+                "contents": "%mdqda.welcome.themeManager%",
+                "when": "view == mdqda.themeManager && !mdqda.themeManager.hasThemes"
             }
         ],
         "configuration": {
@@ -372,5 +481,8 @@
         "@types/vscode": "^1.80.0",
         "@vscode/vsce": "^2.24.0",
         "typescript": "^5.4.0"
+    },
+    "dependencies": {
+        "js-yaml": "^5.3.0"
     }
 }

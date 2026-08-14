@@ -12,21 +12,29 @@ import type { BlockRef, LibraryProvider } from "./library";
 
 export type CodeRef = ParsedRef; // [[note#^id]] 块引用
 
+// 实体类型标签（Obsidian 兼容的 frontmatter tags）
+export const TAG_CODE = "code";
+export const TAG_THEME = "theme";
+
 export interface CodeFile {
-	name: string; // 编码名 = 文件名去 .md
+	name: string; // 实体名 = 文件名去 .md
 	uri: vscode.Uri;
+	tags: string[]; // YAML frontmatter 的 tags（含 code = 编码，含 theme = 主题）
 	definition?: string; // YAML frontmatter 的 definition
-	parent?: string; // YAML frontmatter 的 parent（父编码名，无 = 根级）
-	refs: CodeRef[]; // 去重后的块引用
+	parent?: string; // YAML frontmatter 的 parent（父实体名，无 = 根级）
+	refs: CodeRef[]; // 去重后的块引用（仅编码实体提取）
 	notes: Set<string>; // 覆盖的材料（去重）
 }
 
 export type CodeNode =
 	| { type: "code"; code: CodeFile }
-	| { type: "segment"; code: CodeFile; ref: CodeRef };
+	| { type: "segment"; code: CodeFile; ref: CodeRef }
+	| { type: "unmarkedGroup" } // 根级「未标记文件」折叠分组
+	| { type: "unmarked"; file: CodeFile }; // 受管区内无类型标签的文件
 
-// ---- 编码文件夹解析（mdqda.codingFolder，留空 = 工作区根目录） ----
-function codingFolderUri(): vscode.Uri | undefined {
+// ---- 实体文件夹解析（mdqda.codingFolder，留空 = 工作区根目录） ----
+// 受管区：仅其中 md 必须声明实体标签（code/theme），未声明者标 ⚠
+export function codingFolderUri(): vscode.Uri | undefined {
 	const roots = vscode.workspace.workspaceFolders;
 	if (!roots || roots.length === 0) {
 		return undefined;
@@ -44,6 +52,131 @@ function codingFolderUri(): vscode.Uri | undefined {
 
 async function readText(uri: vscode.Uri): Promise<string> {
 	return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
+}
+
+export interface QdaScanResult {
+	codes: CodeFile[]; // tags 含 code
+	themes: CodeFile[]; // tags 含 theme
+	unmarked: CodeFile[]; // 受管区内无类型标签的文件
+}
+
+// 工作区级扫描：解析全部 md 的 frontmatter，按 tags 分流实体。
+// 只有编码实体才提取块引用（材料/主题跳过，控制成本）。
+export async function scanQdaWorkspace(): Promise<QdaScanResult> {
+	const result: QdaScanResult = { codes: [], themes: [], unmarked: [] };
+	const folder = codingFolderUri();
+	if (!folder) {
+		return result;
+	}
+	// 受管区相对路径；留空 = 工作区根（此时全部无标签 md 都算未标记）
+	const managedRel = vscode.workspace.asRelativePath(folder, false);
+	let files: vscode.Uri[];
+	try {
+		files = await vscode.workspace.findFiles("**/*.md", EXCLUDE_GLOB, 5000);
+	} catch {
+		return result;
+	}
+	for (const uri of files) {
+		let content: string;
+		try {
+			content = await readText(uri);
+		} catch {
+			continue; // 无法读取的文件跳过
+		}
+		const fm = parseFrontmatter(content);
+		const base = {
+			name: path.basename(uri.fsPath, ".md"),
+			uri,
+			tags: fm.tags,
+			definition: fm.definition,
+			parent: fm.parent,
+		};
+		if (fm.tags.includes(TAG_THEME)) {
+			result.themes.push({ ...base, refs: [], notes: new Set() });
+		} else if (fm.tags.includes(TAG_CODE)) {
+			const refs = extractRefs(content, fm.bodyStart);
+			result.codes.push({
+				...base,
+				refs,
+				notes: new Set(refs.map((r) => r.note)),
+			});
+		} else {
+			// 受管区内的无标签文件 = 未标记实体；区外（材料/普通笔记）忽略
+			const rel = vscode.workspace.asRelativePath(uri, false);
+			if (
+				!managedRel ||
+				rel === managedRel ||
+				rel.startsWith(managedRel + "/")
+			) {
+				result.unmarked.push({ ...base, refs: [], notes: new Set() });
+			}
+		}
+	}
+	for (const list of [result.codes, result.themes, result.unmarked]) {
+		list.sort((a, b) => a.name.localeCompare(b.name));
+	}
+	return result;
+}
+
+// 环校验：从 target 沿 parent 上溯，遇到 from 即成环
+export function wouldCreateCycle(
+	from: string,
+	target: string,
+	parentOf: (name: string) => string | undefined,
+): boolean {
+	let cur = target;
+	const seen = new Set<string>();
+	while (cur) {
+		if (cur === from) {
+			return true;
+		}
+		if (seen.has(cur)) {
+			break;
+		}
+		seen.add(cur);
+		cur = parentOf(cur) ?? "";
+	}
+	return false;
+}
+
+// 写实体文件的 parent 字段（空字符串 = 移出父级）
+export async function writeEntityParent(
+	uri: vscode.Uri,
+	parentName: string,
+): Promise<void> {
+	const content = await readText(uri);
+	const updated = setFrontmatterField(content, "parent", parentName);
+	if (updated === content) {
+		return;
+	}
+	const doc = await vscode.workspace.openTextDocument(uri);
+	const full = new vscode.Range(
+		doc.positionAt(0),
+		doc.positionAt(doc.getText().length),
+	);
+	const wsEdit = new vscode.WorkspaceEdit();
+	wsEdit.replace(uri, full, updated);
+	await vscode.workspace.applyEdit(wsEdit);
+}
+
+// 覆写文件的 tags 字段（标记为编码/主题）
+export async function setTagsOnFile(
+	uri: vscode.Uri,
+	tags: string[],
+): Promise<void> {
+	const content = await readText(uri);
+	const updated = setFrontmatterField(content, "tags", `[${tags.join(", ")}]`);
+	if (updated === content) {
+		return;
+	}
+	const doc = await vscode.workspace.openTextDocument(uri);
+	const full = new vscode.Range(
+		doc.positionAt(0),
+		doc.positionAt(doc.getText().length),
+	);
+	const wsEdit = new vscode.WorkspaceEdit();
+	wsEdit.replace(uri, full, updated);
+	await vscode.workspace.applyEdit(wsEdit);
 }
 
 // 选择编码文件夹时跳过的无关目录（与 EXCLUDE_GLOB 保持一致）
@@ -87,6 +220,7 @@ export class CodeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
 	private codes: CodeFile[] = [];
+	private unmarked: CodeFile[] = [];
 	private roots: CodeFile[] = []; // 根级编码（含悬空/成环降级）
 	private childrenOf = new Map<string, CodeFile[]>(); // 父编码名 → 子编码
 	private treeWarnings = new Map<string, string>(); // 编码名 → 警告说明（已本地化）
@@ -130,19 +264,7 @@ export class CodeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 
 	// 写编码文件的 parent 字段（空字符串 = 移出父级）
 	async writeParent(code: CodeFile, parentName: string): Promise<void> {
-		const content = await readText(code.uri);
-		const updated = setFrontmatterField(content, "parent", parentName);
-		if (updated === content) {
-			return;
-		}
-		const doc = await vscode.workspace.openTextDocument(code.uri);
-		const full = new vscode.Range(
-			doc.positionAt(0),
-			doc.positionAt(doc.getText().length),
-		);
-		const wsEdit = new vscode.WorkspaceEdit();
-		wsEdit.replace(code.uri, full, updated);
-		await vscode.workspace.applyEdit(wsEdit);
+		await writeEntityParent(code.uri, parentName);
 	}
 
 	// 扫描编码文件夹：每个 md 文件 = 一个编码，解析 frontmatter 与块引用。
@@ -163,37 +285,9 @@ export class CodeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	}
 
 	private async doScan(): Promise<void> {
-		this.codes = [];
-		const folder = codingFolderUri();
-		if (folder) {
-			try {
-				const files = await vscode.workspace.findFiles(
-					new vscode.RelativePattern(folder, "*.md"),
-					EXCLUDE_GLOB,
-					5000,
-				);
-				for (const uri of files) {
-					try {
-						const content = await readText(uri);
-						const { definition, parent, bodyStart } = parseFrontmatter(content);
-						const refs = extractRefs(content, bodyStart);
-						this.codes.push({
-							name: path.basename(uri.fsPath, ".md"),
-							uri,
-							definition,
-							parent,
-							refs,
-							notes: new Set(refs.map((r) => r.note)),
-						});
-					} catch {
-						// 跳过无法读取的文件
-					}
-				}
-			} catch {
-				// 编码文件夹不存在
-			}
-		}
-		this.codes.sort((a, b) => a.name.localeCompare(b.name));
+		const { codes, unmarked } = await scanQdaWorkspace();
+		this.codes = codes;
+		this.unmarked = unmarked;
 		// 构建父子层级：悬空/成环/超深的编码降级为根级并记警告
 		const tree = buildCodeHierarchy(this.codes);
 		const byName = new Map(this.codes.map((c) => [c.name, c]));
@@ -226,10 +320,14 @@ export class CodeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 
 	getChildren(node?: CodeNode): CodeNode[] {
 		if (!node) {
-			return this.roots.map((code) => ({
+			const roots: CodeNode[] = this.roots.map((code) => ({
 				type: "code" as const,
 				code,
 			}));
+			if (this.unmarked.length > 0) {
+				roots.push({ type: "unmarkedGroup" });
+			}
+			return roots;
 		}
 		if (node.type === "code") {
 			// 子编码在前，片段在后
@@ -244,10 +342,44 @@ export class CodeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 			}));
 			return [...kids, ...segs];
 		}
+		if (node.type === "unmarkedGroup") {
+			return this.unmarked.map((file) => ({
+				type: "unmarked" as const,
+				file,
+			}));
+		}
 		return [];
 	}
 
 	getTreeItem(node: CodeNode): vscode.TreeItem {
+		if (node.type === "unmarkedGroup") {
+			const item = new vscode.TreeItem(
+				vscode.l10n.t("Unmarked files"),
+				vscode.TreeItemCollapsibleState.Collapsed,
+			);
+			item.contextValue = "mdqdaUnmarkedGroup";
+			item.iconPath = new vscode.ThemeIcon("warning");
+			item.description = vscode.l10n.t("{0} files", this.unmarked.length);
+			item.tooltip = vscode.l10n.t(
+				"Files in the coding folder without a code/theme tag; right-click a file to mark it",
+			);
+			return item;
+		}
+		if (node.type === "unmarked") {
+			const f = node.file;
+			const item = new vscode.TreeItem(
+				f.name,
+				vscode.TreeItemCollapsibleState.None,
+			);
+			item.contextValue = "mdqdaUnmarked";
+			item.iconPath = new vscode.ThemeIcon("warning");
+			item.description = vscode.l10n.t("no code/theme tag");
+			item.tooltip = vscode.l10n.t(
+				"“{0}” has no code/theme tag in its YAML frontmatter. Mark it as a code or a theme.",
+				f.name,
+			);
+			return item;
+		}
 		if (node.type === "code") {
 			const c = node.code;
 			const warning = this.treeWarnings.get(c.name);
@@ -474,7 +606,7 @@ export function registerCodeManagerCommands(
 			} catch {
 				// 目标不存在，可创建
 			}
-			const content = `---\ndefinition: ${definition?.trim() ?? ""}\n---\n\n`;
+			const content = `---\ntags: [${TAG_CODE}]\ndefinition: ${definition?.trim() ?? ""}\n---\n\n`;
 			await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
 			await provider.scan();
 		}),
@@ -528,27 +660,22 @@ export function registerCodeManagerCommands(
 				}
 				const target = pick.value;
 				// 校验：目标沿父链上溯不得经过自己（防成环）
-				if (target) {
-					let cur = target;
-					const seen = new Set<string>();
-					while (cur) {
-						if (cur === from.name) {
-							vscode.window.showWarningMessage(
-								vscode.l10n.t(
-									"Cannot set “{0}” as a child of “{1}”: this would create a cycle",
-									from.name,
-									target,
-								),
-							);
-							return;
-						}
-						if (seen.has(cur)) {
-							break;
-						}
-						seen.add(cur);
-						const cf = provider.codeList.find((c) => c.name === cur);
-						cur = cf?.parent ?? "";
-					}
+				if (
+					target &&
+					wouldCreateCycle(
+						from.name,
+						target,
+						(name) => provider.codeList.find((c) => c.name === name)?.parent,
+					)
+				) {
+					vscode.window.showWarningMessage(
+						vscode.l10n.t(
+							"Cannot set “{0}” as a child of “{1}”: this would create a cycle",
+							from.name,
+							target,
+						),
+					);
+					return;
 				}
 				await provider.writeParent(from, target);
 				await provider.scan();
@@ -799,6 +926,32 @@ export function registerCodeManagerCommands(
 					content: lines.join("\n"),
 				});
 				await vscode.window.showTextDocument(doc, { preview: true });
+			},
+		),
+		vscode.commands.registerCommand(
+			"mdqda.codeManager.markAsCode",
+			async (node?: CodeNode) => {
+				if (node?.type !== "unmarked") {
+					return;
+				}
+				await setTagsOnFile(node.file.uri, [TAG_CODE]);
+				vscode.window.showInformationMessage(
+					vscode.l10n.t("Marked “{0}” as a code", node.file.name),
+				);
+				await provider.scan();
+			},
+		),
+		vscode.commands.registerCommand(
+			"mdqda.codeManager.markAsTheme",
+			async (node?: CodeNode) => {
+				if (node?.type !== "unmarked") {
+					return;
+				}
+				await setTagsOnFile(node.file.uri, [TAG_THEME]);
+				vscode.window.showInformationMessage(
+					vscode.l10n.t("Marked “{0}” as a theme", node.file.name),
+				);
+				await provider.scan();
 			},
 		),
 	);

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 (2026-08-14)
+
+- **实体模型重构：frontmatter tags 声明实体类型**——编码 = `tags: [code]`，主题 = `tags: [theme]`，材料（约定）`tags: [material]`；扫描范围从编码文件夹扩展到整个工作区，按 tags 分流，实体类型不再由目录位置推断
+- **新增「主题管理」侧边栏**（`mdqda.themeManager`）：显示全部主题，支持父子主题（复用 `parent` 层级机制），新建/设父/重命名/删除
+- **受管区强制规范**：`mdqda.codingFolder` 内未声明 code/theme 标签的文件归入编码视图「未标记文件」折叠分组并标 ⚠，右键可标记为编码 / 标记为主题
+- **frontmatter 解析升级**：引入 js-yaml 完整解析 tags（支持 Obsidian 的数组 / 列表 / 逗号分隔三种写法），非法 YAML 回退到行级解析；新建编码/主题自动写入 tags
+- 编码视图仅对编码类型提取块引用，材料/主题跳过，控制全工作区扫描成本
+- **Agent 工作流配置**（`QDA: 配置 Agent 工作流`）：不内嵌 LLM，一键把 QDA 协作规则写入根 AGENTS.md（幂等）、复制 3 个 SKILL.md 模板（自然编码 / 理论编码 / 凝练主题）到 `.qda/agent-skills/`，并勾选注入到 `.agents/skills/`（pi+dsh）、`.claude/skills/` 等 agent 目录
+
 ## 0.3.1 (2026-08-11)
 
 - **多语言（中/英文）**：界面文案随 VS Code 显示语言自动切换——命令标题、侧边栏视图、欢迎页、快捷选择、提示消息等全部中英双语（基于 package.nls + l10n 机制），默认英文，简体中文环境自动显示中文

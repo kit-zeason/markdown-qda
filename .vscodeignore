@@ -8,5 +8,6 @@ tsconfig.json
 **/*.map
 .pi-loop.json.lock
 AGENTS.md
+docs/**
 releases/**
 测试项目/**

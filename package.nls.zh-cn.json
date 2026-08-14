@@ -27,5 +27,15 @@
     "mdqda.welcome.blockRefLibrary": "工作区 Markdown 中尚未发现块引用。\n\n在任意 Markdown 段落使用 **QDA: 复制块引用**（`Ctrl+Alt+B`）后，这里会自动列出所有已加块 ID 的文本片段，可右键整理到文件夹。",
     "mdqda.welcome.codeManager": "编码文件夹当前没有 Markdown 文件。\n\n编码 = 编码文件夹下的一个 .md 文件，内容为块引用列表（用 `Ctrl+Alt+B` 追加）。\n\n点击标题栏的文件夹图标**选择编码文件夹**（默认工作区根目录），或点击 + 新建编码。",
     "mdqda.config.title": "QDA Block Reference",
-    "mdqda.config.codingFolder": "编码管理扫描的编码文件夹（相对工作区根目录的相对路径，留空 = 工作区根目录）"
+    "mdqda.config.codingFolder": "QDA 实体（编码与主题）的受管文件夹。其中所有 Markdown 文件必须在 YAML frontmatter 声明 `tags: [code]` 或 `tags: [theme]`，未标记文件会标 ⚠。相对工作区根目录的相对路径，留空 = 工作区根目录",
+    "mdqda.command.codeManager.markAsCode": "QDA: 标记为编码",
+    "mdqda.command.codeManager.markAsTheme": "QDA: 标记为主题",
+    "mdqda.command.themeManager.refresh": "QDA: 刷新主题管理",
+    "mdqda.command.themeManager.newTheme": "QDA: 新建主题",
+    "mdqda.command.themeManager.setThemeParent": "QDA: 设为父主题…",
+    "mdqda.command.themeManager.renameTheme": "QDA: 重命名主题",
+    "mdqda.command.themeManager.deleteTheme": "QDA: 删除主题",
+    "mdqda.view.themeManager.name": "主题管理",
+    "mdqda.welcome.themeManager": "尚未发现主题。主题 = frontmatter 中声明 `tags: [theme]` 的 Markdown 笔记。\n\n点击 **QDA: 新建主题** 创建，或在「编码管理」视图中把未标记笔记标记为主题。",
+    "mdqda.command.setupAgentWorkflow": "QDA: 配置 Agent 工作流"
 }
