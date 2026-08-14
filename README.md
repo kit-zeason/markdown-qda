@@ -4,9 +4,9 @@ Markdown 定性分析（QDA）扩展：为 Markdown 段落生成 **Foam / Obsidi
 
 **简体中文** · [English](#english)
 
-> **发布状态** ⚠️ 本扩展**尚未发布到 VS Code Marketplace / Open VSX**，当前可自行 `npm run package` 打包 `.vsix` 本地安装，后续将通过本仓库 Release 提供安装包。计划未来择机上架，届时更新本说明。
+> **发布状态** ⚠️ 本扩展**尚未发布到 VS Code Marketplace / Open VSX**，当前通过 [Release](https://github.com/kit-zeason/markdown-qda/releases) 提供 `.vsix` 安装包（或自行 `npm run package` 打包）。计划未来择机上架，届时更新本说明。
 >
-> **Publishing status** ⚠️ Not yet published to the VS Code Marketplace / Open VSX. For now, build the `.vsix` locally with `npm run package`; installers will be attached to this repository's Releases later. Marketplace publishing is planned.
+> **Publishing status** ⚠️ Not yet published to the VS Code Marketplace / Open VSX. Install via the `.vsix` from the [Releases](https://github.com/kit-zeason/markdown-qda/releases) page, or build it yourself with `npm run package`. Marketplace publishing is planned.
 
 ---
 
