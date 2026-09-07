@@ -2,7 +2,6 @@
 .pi/**
 .lh/**
 src/**
-node_modules/**
 .gitignore
 tsconfig.json
 **/*.map

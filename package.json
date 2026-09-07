@@ -2,7 +2,7 @@
     "name": "markdown-qda",
     "displayName": "Markdown QDA",
     "description": "%mdqda.description%",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "publisher": "ZeasonGuo",
     "author": "GUO Zeason",
     "l10n": "./l10n",
@@ -37,8 +37,8 @@
         "onCommand:mdqda.blockRefLibrary.deleteSnippet",
         "onView:mdqda.blockRefLibrary",
         "onCommand:mdqda.codeManager.refresh",
-        "onCommand:mdqda.codeManager.selectFolder",
         "onCommand:mdqda.codeManager.newCode",
+        "onCommand:mdqda.codeManager.markAsCodeBulk",
         "onCommand:mdqda.codeManager.openCodeFile",
         "onCommand:mdqda.codeManager.setParent",
         "onCommand:mdqda.codeManager.renameCode",
@@ -48,13 +48,12 @@
         "onCommand:mdqda.codeManager.copySegmentRef",
         "onCommand:mdqda.codeManager.exportCodebook",
         "onView:mdqda.codeManager",
-        "onCommand:mdqda.codeManager.markAsCode",
-        "onCommand:mdqda.codeManager.markAsTheme",
         "onCommand:mdqda.themeManager.refresh",
         "onCommand:mdqda.themeManager.newTheme",
         "onCommand:mdqda.themeManager.setThemeParent",
         "onCommand:mdqda.themeManager.renameTheme",
         "onCommand:mdqda.themeManager.deleteTheme",
+        "onCommand:mdqda.themeManager.markAsThemeBulk",
         "onView:mdqda.themeManager",
         "onCommand:mdqda.setupAgentWorkflow"
     ],
@@ -113,14 +112,14 @@
                 "icon": "$(refresh)"
             },
             {
-                "command": "mdqda.codeManager.selectFolder",
-                "title": "%mdqda.command.codeManager.selectFolder%",
-                "icon": "$(folder-opened)"
-            },
-            {
                 "command": "mdqda.codeManager.newCode",
                 "title": "%mdqda.command.codeManager.newCode%",
                 "icon": "$(new-file)"
+            },
+            {
+                "command": "mdqda.codeManager.markAsCodeBulk",
+                "title": "%mdqda.command.codeManager.markAsCodeBulk%",
+                "icon": "$(tag)"
             },
             {
                 "command": "mdqda.codeManager.openCodeFile",
@@ -156,14 +155,6 @@
                 "icon": "$(export)"
             },
             {
-                "command": "mdqda.codeManager.markAsCode",
-                "title": "%mdqda.command.codeManager.markAsCode%"
-            },
-            {
-                "command": "mdqda.codeManager.markAsTheme",
-                "title": "%mdqda.command.codeManager.markAsTheme%"
-            },
-            {
                 "command": "mdqda.themeManager.refresh",
                 "title": "%mdqda.command.themeManager.refresh%",
                 "icon": "$(refresh)"
@@ -184,6 +175,11 @@
             {
                 "command": "mdqda.themeManager.deleteTheme",
                 "title": "%mdqda.command.themeManager.deleteTheme%"
+            },
+            {
+                "command": "mdqda.themeManager.markAsThemeBulk",
+                "title": "%mdqda.command.themeManager.markAsThemeBulk%",
+                "icon": "$(tag)"
             },
             {
                 "command": "mdqda.setupAgentWorkflow",
@@ -253,14 +249,6 @@
                     "when": "false"
                 },
                 {
-                    "command": "mdqda.codeManager.markAsCode",
-                    "when": "false"
-                },
-                {
-                    "command": "mdqda.codeManager.markAsTheme",
-                    "when": "false"
-                },
-                {
                     "command": "mdqda.themeManager.setThemeParent",
                     "when": "false"
                 },
@@ -297,7 +285,7 @@
                     "group": "navigation@2"
                 },
                 {
-                    "command": "mdqda.codeManager.selectFolder",
+                    "command": "mdqda.codeManager.markAsCodeBulk",
                     "when": "view == mdqda.codeManager",
                     "group": "navigation@1"
                 },
@@ -317,14 +305,19 @@
                     "group": "navigation@4"
                 },
                 {
-                    "command": "mdqda.themeManager.newTheme",
+                    "command": "mdqda.themeManager.markAsThemeBulk",
                     "when": "view == mdqda.themeManager",
                     "group": "navigation@1"
                 },
                 {
-                    "command": "mdqda.themeManager.refresh",
+                    "command": "mdqda.themeManager.newTheme",
                     "when": "view == mdqda.themeManager",
                     "group": "navigation@2"
+                },
+                {
+                    "command": "mdqda.themeManager.refresh",
+                    "when": "view == mdqda.themeManager",
+                    "group": "navigation@3"
                 }
             ],
             "view/item/context": [
@@ -402,16 +395,6 @@
                     "command": "mdqda.themeManager.deleteTheme",
                     "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
                     "group": "1_manage@2"
-                },
-                {
-                    "command": "mdqda.codeManager.markAsCode",
-                    "when": "view == mdqda.codeManager && viewItem == mdqdaUnmarked",
-                    "group": "1_mark@1"
-                },
-                {
-                    "command": "mdqda.codeManager.markAsTheme",
-                    "when": "view == mdqda.codeManager && viewItem == mdqdaUnmarked",
-                    "group": "1_mark@2"
                 }
             ]
         },
@@ -459,17 +442,7 @@
                 "contents": "%mdqda.welcome.themeManager%",
                 "when": "view == mdqda.themeManager && !mdqda.themeManager.hasThemes"
             }
-        ],
-        "configuration": {
-            "title": "%mdqda.config.title%",
-            "properties": {
-                "mdqda.codingFolder": {
-                    "type": "string",
-                    "default": "",
-                    "description": "%mdqda.config.codingFolder%"
-                }
-            }
-        }
+        ]
     },
     "scripts": {
         "compile": "tsc -p ./",

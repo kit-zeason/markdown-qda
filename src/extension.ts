@@ -51,16 +51,6 @@ export function activate(context: vscode.ExtensionContext) {
 	// ---- Agent 工作流配置（AGENTS.md + 技能注入） ----
 	registerAgentWorkflowCommand(context);
 
-	// 编码目录配置变化时刷新
-	context.subscriptions.push(
-		vscode.workspace.onDidChangeConfiguration((e) => {
-			if (e.affectsConfiguration("mdqda.codingFolder")) {
-				void codeManager.scan();
-				void themeManager.scan();
-			}
-		}),
-	);
-
 	// 库内容随 Markdown 文件变化自动刷新
 	const rescan = debounce(() => {
 		void library.scan();

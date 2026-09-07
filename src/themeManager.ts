@@ -4,7 +4,9 @@ import {
 	type CodeFile,
 	type CodeNode,
 	TAG_THEME,
-	codingFolderUri,
+	defineEntities,
+	findDuplicateName,
+	pickEntityFolder,
 	scanQdaWorkspace,
 	wouldCreateCycle,
 	writeEntityParent,
@@ -151,8 +153,8 @@ export function registerThemeManagerCommands(
 			provider.scan(),
 		),
 		vscode.commands.registerCommand("mdqda.themeManager.newTheme", async () => {
-			const folder = codingFolderUri();
-			if (!folder) {
+			const roots = vscode.workspace.workspaceFolders;
+			if (!roots || roots.length === 0) {
 				vscode.window.showWarningMessage(
 					vscode.l10n.t("No workspace folder is open"),
 				);
@@ -169,20 +171,28 @@ export function registerThemeManagerCommands(
 			if (!name) {
 				return;
 			}
-			const definition = await vscode.window.showInputBox({
-				title: vscode.l10n.t("Definition for theme “{0}”", name.trim()),
-				placeHolder: vscode.l10n.t("One-line definition (optional)"),
-			});
-			const uri = vscode.Uri.joinPath(folder, name.trim() + ".md");
-			try {
-				await vscode.workspace.fs.stat(uri);
+			const newName = name.trim();
+			// 全工作区查重：文件名是块引用的主键，跨目录同名会导致解析歧义
+			const dup = await findDuplicateName(newName);
+			if (dup) {
 				vscode.window.showWarningMessage(
-					vscode.l10n.t("Theme “{0}” already exists", name.trim()),
+					vscode.l10n.t("Theme “{0}” already exists: {1}", newName, dup),
 				);
 				return;
-			} catch {
-				// 目标不存在，可创建
 			}
+			const definition = await vscode.window.showInputBox({
+				title: vscode.l10n.t("Definition for theme “{0}”", newName),
+				placeHolder: vscode.l10n.t("One-line definition (optional)"),
+			});
+			const folder = await pickEntityFolder(vscode.l10n.t("QDA: New Theme"));
+			if (folder === undefined) {
+				return;
+			}
+			const uri = vscode.Uri.joinPath(
+				roots[0].uri,
+				...(folder ? folder.split("/") : []),
+				newName + ".md",
+			);
 			const content = `---\ntags: [${TAG_THEME}]\ndefinition: ${definition?.trim() ?? ""}\n---\n\n`;
 			await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
 			await provider.scan();
@@ -328,6 +338,9 @@ export function registerThemeManagerCommands(
 				});
 				await provider.scan();
 			},
+		),
+		vscode.commands.registerCommand("mdqda.themeManager.markAsThemeBulk", () =>
+			defineEntities(TAG_THEME),
 		),
 	);
 }

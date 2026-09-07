@@ -49,11 +49,11 @@ Click the **QDA** icon in the Activity Bar to open the Block Reference Library:
 The second view under the **QDA** Activity Bar icon. **A code = a .md file whose frontmatter declares `tags: [code]`, with a body of block references** (e.g. `0-编码/AI编码.md` contains `[[访谈-01#^a3f9xk]]`). The extension scans the whole workspace and routes files by `tags`: `code` → Code Manager, `theme` → Theme Manager.
 
 - **Code list**: shows each code's **reference count** and **covered-material count** (e.g. `AI编码  3 条 · 2 份材料`); expand to see all segments, hover to jump to the source or copy the reference
-- **Select coding folder**: click the folder icon in the title bar to open the **full project folder list** (including nested subfolders, auto-skipping `.git` / `node_modules` / `.obsidian`); type keywords to filter by **name and path**; you can also pick the workspace root or type a relative path (e.g. `0-编码/subfolder`); configurable via `mdqda.codingFolder` (empty = workspace root)
-- **New code**: click `+` in the title bar, enter a name (definition optional) — a file with YAML frontmatter is created
+- **Define as Code**: click the tag icon in the title bar to open a **multi-select list of files and folders** (auto-skipping `.git` / `node_modules` / `.obsidian`); selected Markdown files are defined directly, selected folders recursively include all Markdown files inside; files that already declare a `code`/`theme` tag are skipped (existing declarations are never overwritten). After definition the entity identity lives in the frontmatter `tags: [code]`, so files can live anywhere in the workspace
+- **New code**: click `+` in the title bar, enter a name (definition optional), then **pick the folder** (defaults to the workspace root or the current file's folder); creation is **checked across the whole workspace**, so duplicate names are rejected
 - **Code operations**: click a code to open its file (definition and references); the context menu offers **Merge** (merge A's references into B, deduplicated, then delete A), Rename (references are unaffected), and Delete (moves to the recycle bin)
 - **Parent-child codes**: hover a code → "QDA: Set as Child Code…" to choose a parent (or remove from parent); the relation is stored in the `parent` field of the code file's frontmatter and rendered as a tree; renaming a parent updates its children automatically; deleting a parent demotes its children to the root level with a ⚠ marker (hover for the reason); **merging** re-parents the child codes under the target — you cannot merge into your own child code
-- **Entity tags & unmarked files**: the coding folder is the **managed area** for QDA entities; every .md inside must declare `tags: [code]` or `tags: [theme]` in its frontmatter (material notes can declare `tags: [material]` for clarity). Files without a tag are grouped under a collapsed **Unmarked files** node with a ⚠ marker; right-click to **Mark as Code / Mark as Theme**
+- **Entity declaration**: entity type is declared entirely by frontmatter `tags` (code `[code]` / theme `[theme]`; materials may declare `[material]` for clarity). Untagged Markdown files never enter the code/theme views — they are plain notes/materials, and their block references are still collected by the Block Reference Library
 - **Code definition**: the `definition:` field in the YAML frontmatter of the code file, shown on hover
 - **Export codebook**: the export button in the title bar generates a codebook Markdown document with definitions, reference counts, and all references (an unsaved document — save it yourself)
 - The Code Manager complements the Block Reference Library: **the library is the snippet view** (which paragraphs are coded), **the Code Manager is the code view** (which segments each code collects)
@@ -63,7 +63,8 @@ The second view under the **QDA** Activity Bar icon. **A code = a .md file whose
 The third view under the **QDA** Activity Bar icon. **A theme = a .md file whose frontmatter declares `tags: [theme]`**; it is loosely defined: the body is narrative analysis (free-form writing, optionally with `Ctrl+Alt+B` block references to codes) rather than a plain list of references.
 
 - **Theme list**: shows all themes; **parent-child themes** are supported (the `parent` frontmatter field, the same hierarchy mechanism as codes); hover for the definition
-- **New theme**: click `+` in the title bar, enter a name (definition optional) — a file with `tags: [theme]` frontmatter is created
+- **Define as Theme**: click the tag icon in the title bar — the same interaction as Define as Code, but writing `tags: [theme]` to selected files or folders
+- **New theme**: click `+` in the title bar, enter a name (definition optional), pick the folder — a file with `tags: [theme]` frontmatter is created; creation is checked across the whole workspace
 - **Theme operations**: right-click to set a parent theme / rename / delete (recycle bin); renaming a parent updates its children automatically
 - Codes and themes share the same source: a .md file is either a code (`tags: [code]`) or a theme (`tags: [theme]`), declared by frontmatter rather than by its directory
 
@@ -104,7 +105,7 @@ The snippet also appears in the Block Reference Library:
 
 Hover to reveal/copy; right-click to move it into a `压力` folder or delete the block reference.
 
-After switching the coding folder to `0-编码` in the Code Manager view, `AI编码.md` shows as one code (`AI编码 1 条 · 1 份材料`); expand it to see all segments collected under it.
+Once `0-编码/AI编码.md` declares `tags: [code]` (or you select it in the Code Manager and click **Define as Code**), it shows as one code (`AI编码 1 条 · 1 份材料`); expand it to see all segments collected under it.
 
 Theme example: add `tags: [theme]` to `0-编码/主题-合作编码.md` and it appears in the Theme Manager view (sharing the same folder with codes without interference).
 
@@ -171,11 +172,11 @@ npm run package          # package .vsix into the releases/ directory
 活动栏 **QDA** 图标下第二个视图。**编码 = frontmatter 声明 `tags: [code]` 的 md 文件，内容为块引用列表**（如 `0-编码/AI编码.md` 里放着 `[[访谈-01#^a3f9xk]]`）。扩展扫描整个工作区，按 `tags` 分流：含 `code` → 编码视图，含 `theme` → 主题视图。
 
 - **编码列表**：显示每个编码的**引用数**与**覆盖材料数**（如 `AI编码  3 条 · 2 份材料`）；展开可见全部片段，悬停可跳转原文、复制引用
-- **选择编码文件夹**：标题栏文件夹图标，弹出**全项目文件夹列表**（含任意层级子文件夹，自动跳过 `.git`/`node_modules`/`.obsidian`），输入关键字即按**名称与路径**过滤；也可选工作区根目录，或输入相对路径（如 `0-编码/子文件夹`）；设置项 `mdqda.codingFolder`（留空 = 根目录）
-- **新建编码**：标题栏 `+`，输入名称（可选定义）自动生成带 YAML frontmatter 的文件
+- **定义为编码**：标题栏按钮（标签图标），弹出**文件与文件夹多选列表**（自动跳过 `.git`/`node_modules`/`.obsidian`）；选中单个/多个 Markdown 文件直接定义，选中文件夹 = 递归包含其下全部 Markdown；已声明 `code`/`theme` 标签的文件自动跳过（不覆盖既有声明）。定义后实体身份由 frontmatter `tags: [code]` 决定，文件可放在工作区任意位置
+- **新建编码**：标题栏 `+`，输入名称（可选定义）后**选择存放目录**（默认工作区根或当前活动文件目录）；新建时**全工作区查重**，跨目录同名直接阻止
 - **编码操作**：单击编码打开编码文件（查看定义与引用列表）；右键菜单依次为**合并**（把 A 的引用并入 B 去重后删 A）、重命名（引用不受影响）、删除（回收站可恢复）
 - **父子编码**：悬停编码 →「QDA: 设为子编码…」选择父编码（或移出父级），关系写入编码文件 frontmatter 的 `parent` 字段，树按层级展示；父编码改名时子编码自动跟随；父编码被删除时子编码降级为根级并标 ⚠（悬停查看原因）；**合并**时子编码自动改挂到目标编码下，不能合并进自己的子编码
-- **实体标签与未标记**：编码文件夹是 QDA 实体的**受管区**，区内每个 md 必须在 frontmatter 声明 `tags: [code]` 或 `tags: [theme]`（材料笔记可声明 `tags: [material]` 以明确身份）；未声明标签的文件归入根部的「未标记文件」分组（默认折叠）并标 ⚠，右键可**标记为编码 / 标记为主题**
+- **实体声明**：实体类型完全由 frontmatter `tags` 声明（编码 `[code]` / 主题 `[theme]`，材料可声明 `[material]` 以明确身份）；无标签的 Markdown 文件不进入编码/主题视图，其块引用照常由块引用库收集
 - **编码定义**：代码文件头部 YAML frontmatter 的 `definition:` 字段，悬停编码时显示
 - **导出编码本**：标题栏导出按钮，生成含定义、引用数、全部引用的编码本 Markdown（未保存文档，可自行另存）
 - 编码与块引用库互补：**块引用库是片段视角**（哪些段落被编码），**编码管理是代码视角**（每个编码收了哪些段落）
@@ -185,7 +186,8 @@ npm run package          # package .vsix into the releases/ directory
 活动栏 **QDA** 图标下第三个视图。**主题 = frontmatter 声明 `tags: [theme]` 的 md 文件**，定义较松：正文是叙述性分析（可自由书写，也可用 `Ctrl+Alt+B` 引用编码片段），无需像编码那样是纯块引用列表。
 
 - **主题列表**：显示全部主题；支持**父子主题**（frontmatter 的 `parent` 字段，与编码同一套层级机制），悬停查看定义
-- **新建主题**：标题栏 `+`，输入名称（可选定义）自动生成带 `tags: [theme]` frontmatter 的文件
+- **定义为主题**：标题栏按钮（标签图标），与「定义为编码」同一交互——选中文件或文件夹批量写入 `tags: [theme]`
+- **新建主题**：标题栏 `+`，输入名称（可选定义）后选择存放目录，自动生成带 `tags: [theme]` frontmatter 的文件；新建时全工作区查重
 - **主题操作**：右键可设为父主题 / 重命名 / 删除（回收站可恢复）；父主题改名时子主题自动跟随
 - 编码与主题同源：一个 md 文件要么是编码（`tags: [code]`），要么是主题（`tags: [theme]`），由 frontmatter 声明而非所在目录决定
 
@@ -226,7 +228,7 @@ npm run package          # package .vsix into the releases/ directory
 
 悬停可跳转/复制，右键可归入 `压力` 文件夹或删除块引用。
 
-在「编码管理」视图把编码文件夹切到 `0-编码` 后，`AI编码.md` 会显示为一行编码（`AI编码 1 条 · 1 份材料`），展开即该编码下收录的全部片段。
+给 `0-编码/AI编码.md` 声明 `tags: [code]`（或在「编码管理」视图选中它点击「定义为编码」），它就会显示为一行编码（`AI编码 1 条 · 1 份材料`），展开即该编码下收录的全部片段。
 
 主题示例：给 `0-编码/主题-合作编码.md` 写入 `tags: [theme]`，它就会出现在「主题管理」视图（与编码共处同一文件夹互不干扰）。
 
