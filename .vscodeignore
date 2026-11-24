@@ -10,3 +10,5 @@ AGENTS.md
 docs/**
 releases/**
 测试项目/**
+**/__pycache__/**
+**/.ruff_cache/**
