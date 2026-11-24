@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { buildCodeHierarchy } from "./parse";
+import { buildEntityFrontmatter, buildEntityGraph } from "./parse";
 import {
 	type CodeFile,
 	type CodeNode,
@@ -7,14 +7,13 @@ import {
 	defineEntities,
 	findDuplicateName,
 	pickEntityFolder,
+	replaceChildName,
 	scanQdaWorkspace,
-	wouldCreateCycle,
-	writeEntityParent,
 } from "./codeManager";
 import type { LibraryProvider } from "./library";
 
-// 主题管理视图：显示 tags 含 theme 的实体。主题与编码共用 frontmatter 的
-// parent 层级机制（buildCodeHierarchy），但主题正文是自由叙述而非块引用列表。
+// 主题管理视图：显示 tags 含 theme 的实体。
+// 关系与编码共用同一套 children（父端声明成员）机制，主题的成员可以是编码或子主题。
 export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	private readonly _onDidChangeTreeData = new vscode.EventEmitter<
 		CodeNode | undefined | void
@@ -22,9 +21,10 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
 	private themes: CodeFile[] = [];
-	private roots: CodeFile[] = []; // 根级主题（含悬空/成环降级）
-	private childrenOf = new Map<string, CodeFile[]>(); // 父主题名 → 子主题
-	private treeWarnings = new Map<string, string>(); // 主题名 → 警告说明（已本地化）
+	private roots: CodeFile[] = [];
+	private childrenOf = new Map<string, CodeFile[]>(); // 子主题
+	private codeCount = new Map<string, number>(); // 主题名 → 直接收录的编码数
+	private treeWarnings = new Map<string, string>();
 	private scanChain: Promise<void> | undefined;
 	private scanQueued = false;
 
@@ -63,25 +63,47 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	}
 
 	private async doScan(): Promise<void> {
-		const { themes } = await scanQdaWorkspace();
+		const { codes, themes, legacy } = await scanQdaWorkspace();
 		this.themes = themes;
-		// 与编码共用同一套层级构建：悬空/成环/超深降级为根级并记警告
-		const tree = buildCodeHierarchy(this.themes);
-		const byName = new Map(this.themes.map((t) => [t.name, t]));
-		this.roots = tree.roots.map((n) => byName.get(n)!);
+		const codeNames = new Set(codes.map((c) => c.name));
+		const allNames = new Set([...codeNames, ...themes.map((t) => t.name)]);
+		// 主题图：成员可以是编码（不计入树）或子主题（递归展开）
+		const graph = buildEntityGraph(themes, allNames);
+		const byName = new Map(themes.map((t) => [t.name, t]));
+		this.roots = graph.roots
+			.map((n) => byName.get(n))
+			.filter((t): t is CodeFile => t !== undefined);
 		this.childrenOf = new Map();
-		for (const [p, kids] of tree.childrenOf) {
+		this.codeCount = new Map();
+		for (const t of themes) {
 			this.childrenOf.set(
-				p,
-				kids.map((n) => byName.get(n)!),
+				t.name,
+				(t.children
+					.map((n) => byName.get(n))
+					.filter((x): x is CodeFile => x !== undefined)),
+			);
+			this.codeCount.set(
+				t.name,
+				t.children.filter((n) => codeNames.has(n)).length,
 			);
 		}
 		this.treeWarnings = new Map(
-			[...tree.warnings].map(([name, w]) => [
+			[...graph.warnings].map(([name, w]) => [
 				name,
 				vscode.l10n.t(w.template, ...w.args),
 			]),
 		);
+		const legacySet = new Set(legacy);
+		for (const t of themes) {
+			if (legacySet.has(t.name) && !this.treeWarnings.has(t.name)) {
+				this.treeWarnings.set(
+					t.name,
+					vscode.l10n.t(
+						"Legacy `parent` field found; run QDA: Migrate Parent to Children",
+					),
+				);
+			}
+		}
 		await vscode.commands.executeCommand(
 			"setContext",
 			"mdqda.themeManager.hasThemes",
@@ -92,15 +114,20 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 
 	getChildren(node?: CodeNode): CodeNode[] {
 		if (!node) {
-			return this.roots.map((t) => ({ type: "code" as const, code: t }));
-		}
-		if (node.type === "code") {
-			return (this.childrenOf.get(node.code.name) ?? []).map((t) => ({
+			return this.roots.map((t) => ({
 				type: "code" as const,
 				code: t,
+				path: t.name,
 			}));
 		}
-		return [];
+		if (node.type !== "code") {
+			return [];
+		}
+		return (this.childrenOf.get(node.code.name) ?? []).map((t) => ({
+			type: "code" as const,
+			code: t,
+			path: `${node.path}/${t.name}`,
+		}));
 	}
 
 	getTreeItem(node: CodeNode): vscode.TreeItem {
@@ -110,18 +137,23 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 		const t = node.code;
 		const warning = this.treeWarnings.get(t.name);
 		const kids = this.childrenOf.get(t.name) ?? [];
+		const codes = this.codeCount.get(t.name) ?? 0;
 		const item = new vscode.TreeItem(
 			t.name,
 			kids.length > 0
 				? vscode.TreeItemCollapsibleState.Collapsed
 				: vscode.TreeItemCollapsibleState.None,
 		);
+		item.id = node.path;
 		item.contextValue = "mdqdaTheme";
 		item.iconPath = new vscode.ThemeIcon(warning ? "warning" : "symbol-misc");
-		if (kids.length > 0) {
-			item.description = vscode.l10n.t("{0} subthemes", kids.length);
-		}
-		item.tooltip = themeTooltip(t, warning);
+		item.description =
+			(kids.length > 0
+				? vscode.l10n.t("{0} subthemes", kids.length) + " · "
+				: "") +
+			vscode.l10n.t("{0} codes", codes) +
+			(warning ? " ⚠" : "");
+		item.tooltip = themeTooltip(t, warning, codes);
 		// 单击 = 打开主题文件（复用编码文件的打开命令，参数同为 CodeNode）
 		item.command = {
 			command: "mdqda.codeManager.openCodeFile",
@@ -132,9 +164,15 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	}
 }
 
-function themeTooltip(t: CodeFile, warning?: string): vscode.MarkdownString {
+function themeTooltip(
+	t: CodeFile,
+	warning: string | undefined,
+	codes: number,
+): vscode.MarkdownString {
 	const md = new vscode.MarkdownString();
-	md.appendMarkdown(vscode.l10n.t("**{0}**", t.name) + "\n\n");
+	md.appendMarkdown(
+		vscode.l10n.t("**{0}** · {1} codes", t.name, codes) + "\n\n",
+	);
 	md.appendMarkdown(
 		t.definition ? t.definition : vscode.l10n.t("_(no definition)_"),
 	);
@@ -193,70 +231,10 @@ export function registerThemeManagerCommands(
 				...(folder ? folder.split("/") : []),
 				newName + ".md",
 			);
-			const content = `---\ntags: [${TAG_THEME}]\ndefinition: ${definition?.trim() ?? ""}\n---\n\n`;
+			const content = buildEntityFrontmatter(TAG_THEME, definition);
 			await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
 			await provider.scan();
 		}),
-		vscode.commands.registerCommand(
-			"mdqda.themeManager.setThemeParent",
-			async (node?: CodeNode) => {
-				if (node?.type !== "code") {
-					return;
-				}
-				const from = node.code;
-				const others = provider.themeList.filter((t) => t.name !== from.name);
-				if (others.length === 0) {
-					vscode.window.showInformationMessage(
-						vscode.l10n.t("No other themes available to set as parent"),
-					);
-					return;
-				}
-				const items: (vscode.QuickPickItem & { value: string })[] = [];
-				if (from.parent) {
-					items.push({
-						label: "$(close) " + vscode.l10n.t("Remove from parent"),
-						description: vscode.l10n.t("Current parent: {0}", from.parent),
-						value: "",
-					});
-				}
-				items.push(
-					...others.map((t) => ({
-						label: t.name,
-						description: t.definition ?? "",
-						value: t.name,
-					})),
-				);
-				const pick = await vscode.window.showQuickPick(items, {
-					title: vscode.l10n.t("Set parent theme for “{0}”", from.name),
-					placeHolder: vscode.l10n.t(
-						"Select a parent theme; choose “Remove from parent” to cancel the relationship",
-					),
-				});
-				if (!pick) {
-					return;
-				}
-				const target = pick.value;
-				if (
-					target &&
-					wouldCreateCycle(
-						from.name,
-						target,
-						(name) => provider.themeList.find((t) => t.name === name)?.parent,
-					)
-				) {
-					vscode.window.showWarningMessage(
-						vscode.l10n.t(
-							"Cannot set “{0}” as a child of “{1}”: this would create a cycle",
-							from.name,
-							target,
-						),
-					);
-					return;
-				}
-				await writeEntityParent(from.uri, target);
-				await provider.scan();
-			},
-		),
 		vscode.commands.registerCommand(
 			"mdqda.themeManager.renameTheme",
 			async (node?: CodeNode) => {
@@ -293,16 +271,8 @@ export function registerThemeManagerCommands(
 				const wsEdit = new vscode.WorkspaceEdit();
 				wsEdit.renameFile(node.code.uri, newUri);
 				await vscode.workspace.applyEdit(wsEdit);
-				// 同步子主题的 parent 字段（旧名 → 新名）
-				for (const kid of provider.themeList.filter(
-					(t) => t.parent === oldName,
-				)) {
-					try {
-						await writeEntityParent(kid.uri, newName);
-					} catch {
-						// 单个文件写入失败不中断重命名
-					}
-				}
+				// 同步其它实体 children 里的旧名
+				await replaceChildName(oldName, newName);
 				await provider.scan();
 			},
 		),
@@ -312,9 +282,7 @@ export function registerThemeManagerCommands(
 				if (node?.type !== "code") {
 					return;
 				}
-				const kidsCount = provider.themeList.filter(
-					(t) => t.parent === node.code.name,
-				).length;
+				const kidsCount = provider.childThemes(node.code).length;
 				const deleteLabel = vscode.l10n.t("Delete");
 				const pick = await vscode.window.showWarningMessage(
 					vscode.l10n.t(

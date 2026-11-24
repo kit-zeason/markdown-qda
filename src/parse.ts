@@ -45,11 +45,12 @@ export function collectBlockRefs(
 
 // ---- 实体文件解析（纯逻辑，不依赖 vscode） ----
 
-// frontmatter 解析结果：tags 为实体类型标签（code/theme），definition/parent 为既有字段
+// frontmatter 解析结果：tags 为实体类型标签（code/theme），definition 为一句话定义，
+// children 为「我直接包含的实体名」（父端声明；同一实体出现在多个父下即多父）
 export interface ParsedFrontmatter {
 	tags: string[];
 	definition?: string;
-	parent?: string;
+	children: string[];
 	bodyStart: number;
 }
 
@@ -67,27 +68,38 @@ function normalizeTags(v: unknown): string[] {
 	return [];
 }
 
+// children 归一化：兼容 [[名字]] / 别名 / 锚点写法，去空白与重复
+function normalizeNames(v: unknown): string[] {
+	const raw = typeof v === "string" ? [v] : Array.isArray(v) ? v : [];
+	const out: string[] = [];
+	for (const item of raw) {
+		if (typeof item !== "string") {
+			continue;
+		}
+		const name = item
+			.trim()
+			.replace(/^\[\[/, "")
+			.replace(/\]\]$/, "")
+			.split("|")[0]
+			.split("#")[0]
+			.trim();
+		if (name && !out.includes(name)) {
+			out.push(name);
+		}
+	}
+	return out;
+}
+
 function strField(v: unknown): string | undefined {
 	return typeof v === "string" && v.trim() ? v.trim() : undefined;
 }
 
-// 行级回退：frontmatter 不是合法 YAML 时只取平铺的 definition/parent，tags 视为空
-function lineFallback(fmText: string): {
-	definition?: string;
-	parent?: string;
-} {
-	const fmLines = fmText.split("\n");
-	const line = (field: string) =>
-		fmLines.find((l) => {
-			const t = l.trim();
-			return t.toLowerCase().startsWith(field.toLowerCase() + ":");
-		});
-	const def = line("definition");
-	const parent = line("parent");
-	return {
-		definition: def?.replace(/^definition:\s*/i, "").trim(),
-		parent: parent?.replace(/^parent:\s*/i, "").trim() || undefined,
-	};
+// 行级回退：frontmatter 不是合法 YAML 时只取平铺的 definition，tags/children 视为空
+function lineFallback(fmText: string): { definition?: string } {
+	const line = fmText
+		.split("\n")
+		.find((l) => l.trim().toLowerCase().startsWith("definition:"));
+	return { definition: line?.replace(/^definition:\s*/i, "").trim() };
 }
 
 // 解析文件头 YAML frontmatter：用 js-yaml 完整解析（tags/definition/parent）；
@@ -95,14 +107,14 @@ function lineFallback(fmText: string): {
 export function parseFrontmatter(content: string): ParsedFrontmatter {
 	const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
 	if (!m) {
-		return { tags: [], bodyStart: 0 };
+		return { tags: [], children: [], bodyStart: 0 };
 	}
 	const bodyStart = m[0].length;
 	let data: unknown;
 	try {
 		data = yaml.load(m[1]);
 	} catch {
-		return { tags: [], ...lineFallback(m[1]), bodyStart };
+		return { tags: [], children: [], ...lineFallback(m[1]), bodyStart };
 	}
 	const obj =
 		data && typeof data === "object" && !Array.isArray(data)
@@ -111,12 +123,41 @@ export function parseFrontmatter(content: string): ParsedFrontmatter {
 	return {
 		tags: normalizeTags(obj.tags),
 		definition: strField(obj.definition),
-		parent: strField(obj.parent),
+		children: normalizeNames(obj.children),
 		bodyStart,
 	};
 }
 
-// 写入/删除 frontmatter 字段；value 为空字符串 = 删除该字段行。
+// frontmatter 中某个字段占用的行范围：键所在行 + 其后所有缩进续行（列表项等）。
+// 用于定位并整体替换字段，避免残留旧写法造成的非法 YAML。
+function fieldBlockRange(
+	lines: string[],
+	field: string,
+): { start: number; end: number } | null {
+	const start = lines.findIndex((l) => {
+		const t = l.trim();
+		return t.toLowerCase().startsWith(field.toLowerCase() + ":");
+	});
+	if (start < 0) {
+		return null;
+	}
+	let end = start + 1;
+	while (
+		end < lines.length &&
+		lines[end].trim() !== "" &&
+		/^\s/.test(lines[end])
+	) {
+		end++;
+	}
+	return { start, end };
+}
+
+// YAML 标量安全渲染：含 ":" 等字符时由 js-yaml 自动加引号，避免写出非法 YAML
+export function yamlScalar(value: string): string {
+	return yaml.dump(value).trimEnd();
+}
+
+// 写入/删除 frontmatter 标量字段；value 为空字符串 = 删除该字段。
 // 无 frontmatter 且需要写入时，在文件头新建 frontmatter。
 export function setFrontmatterField(
 	content: string,
@@ -128,34 +169,85 @@ export function setFrontmatterField(
 		if (!value) {
 			return content; // 无 frontmatter 且删除字段：无操作
 		}
-		return `---\n${field}: ${value}\n---\n\n` + content;
+		return `---\n${field}: ${yamlScalar(value)}\n---\n\n` + content;
 	}
 	const lines = m[1].split("\n");
-	const idx = lines.findIndex((l) => {
-		const t = l.trim();
-		return t.toLowerCase().startsWith(field.toLowerCase() + ":");
-	});
-	let newFm: string;
+	const range = fieldBlockRange(lines, field);
 	if (value) {
-		if (idx >= 0) {
-			lines[idx] = `${field}: ${value}`;
+		const block = [`${field}: ${yamlScalar(value)}`];
+		if (range) {
+			lines.splice(range.start, range.end - range.start, ...block);
 		} else {
-			lines.push(`${field}: ${value}`);
+			lines.push(...block);
 		}
-		newFm = lines.join("\n");
 	} else {
-		if (idx < 0) {
+		if (!range) {
 			return content; // 字段不存在且删除：无操作
 		}
-		lines.splice(idx, 1);
-		newFm = lines
-			.join("\n")
-			.replace(/\n{2,}/g, "\n")
-			.replace(/^\n+/, "")
-			.replace(/\n+$/, "");
+		lines.splice(range.start, range.end - range.start);
 	}
+	const newFm = lines
+		.join("\n")
+		.replace(/\n{2,}/g, "\n")
+		.replace(/^\n+/, "")
+		.replace(/\n+$/, "");
 	const rest = content.slice((m.index ?? 0) + m[0].length);
 	return `---\n${newFm}\n---\n${rest}`;
+}
+
+// 覆写 frontmatter 列表字段，一律写成 YAML 块式列表（Obsidian 规范）：
+//
+//	tags:
+//	  - code
+//
+// 读取端兼容内联数组 / 块式列表 / 逗号分隔字符串三种写法，写入端只产出块式。
+export function setFrontmatterList(
+	content: string,
+	field: string,
+	items: string[],
+): string {
+	const m = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+	const block = items.length ? yaml.dump({ [field]: items }).trimEnd() : "";
+	if (!m) {
+		if (!block) {
+			return content;
+		}
+		return `---\n${block}\n---\n\n` + content;
+	}
+	const lines = m[1].split("\n");
+	const range = fieldBlockRange(lines, field);
+	if (block) {
+		const blockLines = block.split("\n");
+		if (range) {
+			lines.splice(range.start, range.end - range.start, ...blockLines);
+		} else {
+			lines.push(...blockLines);
+		}
+	} else if (range) {
+		lines.splice(range.start, range.end - range.start);
+	} else {
+		return content; // 无该字段且无需写入：无操作
+	}
+	const newFm = lines
+		.join("\n")
+		.replace(/\n{2,}/g, "\n")
+		.replace(/^\n+/, "")
+		.replace(/\n+$/, "");
+	const rest = content.slice((m.index ?? 0) + m[0].length);
+	return `---\n${newFm}\n---\n${rest}`;
+}
+
+// 生成实体文件的 frontmatter：块式 tags + 可选 definition
+export function buildEntityFrontmatter(
+	type: string,
+	definition?: string,
+): string {
+	const data: Record<string, unknown> = { tags: [type] };
+	const def = definition?.trim();
+	if (def) {
+		data.definition = def;
+	}
+	return `---\n${yaml.dump(data).trimEnd()}\n---\n\n`;
 }
 
 // 多级编码深度上限（超出仅警告，仍正常显示）
@@ -172,54 +264,65 @@ export interface CodeTreeResult {
 	warnings: Map<string, WarningMessage>; // 编码名 → 警告（悬空/成环/超深）
 }
 
-// 由编码的 parent 字段构建层级树：悬空/成环的编码降级为根级并记警告。
-// 渲染层只消费本函数产出的结构，不递归跟随 parent，保证不可能死循环。
-export function buildCodeHierarchy(
-	codes: { name: string; parent?: string }[],
+// 由 children 字段构建实体图：父端声明成员，同一实体可挂在多个父下（DAG）。
+// known 用来区分「悬空引用」与「合法但不属于本视图」的成员（如主题视图里的编码成员）；
+// missingTemplate 由调用方给，编码视图与主题视图对"不认识的成员"措辞不同。
+// 环内节点提升为根级并断开其出边，保证渲染层不会死循环。
+export interface GraphEntity {
+	name: string;
+	children: string[];
+}
+
+export function buildEntityGraph(
+	entities: GraphEntity[],
+	known?: Set<string>,
+	missingTemplate = "Child “{0}” does not exist; ignored",
 ): CodeTreeResult {
-	const byName = new Set(codes.map((c) => c.name));
-	const parentsOf = new Map<string, string>();
-	for (const c of codes) {
-		if (c.parent) {
-			parentsOf.set(c.name, c.parent);
+	const byName = new Map(entities.map((e) => [e.name, e]));
+	const knownNames = known ?? new Set(byName.keys());
+	const warnings = new Map<string, WarningMessage>();
+	const edges = new Map<string, string[]>();
+
+	for (const e of entities) {
+		const kept: string[] = [];
+		for (const c of e.children) {
+			if (!knownNames.has(c)) {
+				if (!warnings.has(e.name)) {
+					warnings.set(e.name, { template: missingTemplate, args: [c] });
+				}
+				continue;
+			}
+			if (byName.has(c)) {
+				kept.push(c); // 只渲染本视图内的实体
+			}
 		}
+		edges.set(e.name, kept);
 	}
 
-	const warnings = new Map<string, WarningMessage>();
-	// 悬空：parent 指向不存在的编码
-	for (const [name, p] of parentsOf) {
-		if (!byName.has(p)) {
-			warnings.set(name, {
-				template: "Parent code “{0}” does not exist; shown at root level",
-				args: [p],
-			});
-		}
-	}
-	// 环检测：沿 parent 链 DFS（每节点至多一条出边），环内与指向环的节点都降级
+	// 环检测（DFS 三色）：回边经过的节点记为环内
+	const state = new Map<string, 1 | 2>();
+	const stack: string[] = [];
 	const inCycle = new Set<string>();
-	const state = new Map<string, number>(); // 0 未访问 1 访问中 2 完成
-	const dfs = (name: string): boolean => {
-		const s = state.get(name) ?? 0;
-		if (s === 1) {
-			return true; // 发现环
+	const visit = (name: string): void => {
+		if (state.get(name) === 1) {
+			for (let i = stack.lastIndexOf(name); i < stack.length; i++) {
+				inCycle.add(stack[i]);
+			}
+			return;
 		}
-		if (s === 2) {
-			return inCycle.has(name); // 已处理：按是否在环内返回
+		if (state.get(name) === 2) {
+			return;
 		}
 		state.set(name, 1);
-		const p = parentsOf.get(name);
-		let cyclic = false;
-		if (p && byName.has(p)) {
-			cyclic = dfs(p);
+		stack.push(name);
+		for (const c of edges.get(name) ?? []) {
+			visit(c);
 		}
+		stack.pop();
 		state.set(name, 2);
-		if (cyclic) {
-			inCycle.add(name);
-		}
-		return cyclic;
 	};
-	for (const c of codes) {
-		dfs(c.name);
+	for (const e of entities) {
+		visit(e.name);
 	}
 	for (const name of inCycle) {
 		warnings.set(name, {
@@ -228,20 +331,19 @@ export function buildCodeHierarchy(
 		});
 	}
 
-	// 正常父子关系 + 根级
+	// 环内节点断开出边，且不再作为别人的子节点，只以根级出现
 	const childrenOf = new Map<string, string[]>();
-	for (const c of codes) {
-		childrenOf.set(c.name, []);
-	}
-	const roots: string[] = [];
-	for (const c of codes) {
-		const p = parentsOf.get(c.name);
-		if (!p || !byName.has(p) || inCycle.has(c.name)) {
-			roots.push(c.name);
-		} else {
-			childrenOf.get(p)!.push(c.name);
+	const referenced = new Set<string>();
+	for (const e of entities) {
+		const kids = (edges.get(e.name) ?? []).filter((k) => !inCycle.has(k));
+		childrenOf.set(e.name, kids);
+		for (const k of kids) {
+			referenced.add(k);
 		}
 	}
+	const roots = entities
+		.map((e) => e.name)
+		.filter((n) => !referenced.has(n));
 
 	// 深度检查（BFS，从根向下；超出上限仅警告）
 	const depth = new Map<string, number>();

@@ -1,6 +1,6 @@
 ---
 name: qda-natural-coding
-description: 对 QDA 材料做自然语言编码（开放编码）。读取用户指定的材料 Markdown（含 ^id 块引用），按语义逐段归纳为编码，写入编码本文件夹中的编码文件（frontmatter 声明 tags: [code]，正文为 [[材料#^id]] 块引用列表）。触发词：对材料编码、自然编码、开放编码、open coding、给这段材料编码。
+description: 对 QDA 材料做自然语言编码（开放编码）。读取用户指定的材料 Markdown（含 ^id 块引用），按语义逐段归纳为编码，写入编码本文件夹中的编码文件（frontmatter 的 tags 用 YAML 块式列表声明 code，正文为 [[材料#^id]] 块引用列表）。触发词：对材料编码、自然编码、开放编码、open coding、给这段材料编码。
 ---
 
 # QDA 自然编码（Open Coding）
@@ -9,7 +9,7 @@ description: 对 QDA 材料做自然语言编码（开放编码）。读取用�
 
 ## 前置条件
 
-- 材料文件存在（用户指定，或按 `tags: [material]` 与目录结构定位）
+- 材料文件存在（用户指定，或按 `tags` 块式列表中的 `material` 与目录结构定位）
 - 材料段落需要 `^id` 块标识（缺失时按下方规则补上）
 
 ## 块 ID 规则（必须遵守）
@@ -26,13 +26,15 @@ description: 对 QDA 材料做自然语言编码（开放编码）。读取用�
 
 ```yaml
 ---
-tags: [code]
+tags:
+  - code
 definition: 一句话定义
-parent: 父编码名（可选）
 ---
 ```
 
-正文 = 块引用列表，每行一个 `[[材料#^id]]`。
+`tags` 一律写成 YAML 块式列表（Obsidian 规范），不得写成 `tags: [code]` 内联数组。
+
+正文 = 块引用列表，每行一个 `[[材料#^id]]`。层级由**父编码**的 `children` 声明（本文件不写指向父的字段），需要归组时交给理论编码或扩展的「加入父实体」命令。
 
 ## 步骤
 
@@ -44,7 +46,7 @@ parent: 父编码名（可选）
 
 ## 检查清单
 
-- [ ] 每个编码文件 frontmatter 有 `tags: [code]`
+- [ ] 每个编码文件 frontmatter 的 `tags` 是块式列表且含 `code`
 - [ ] 引用格式正确（去扩展名 + `#^id`）
 - [ ] 无重复引用、无叠加块 ID
 - [ ] 编码名与 definition 一致，不互相重复

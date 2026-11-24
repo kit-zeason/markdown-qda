@@ -24,11 +24,12 @@ const AGENTS_SECTION = `## QDA Agent Workflow
 
 本项目的 QDA 实体由 markdown-qda 扩展定义。Agent 协作时遵守：
 
-- **实体类型**：frontmatter tags 声明——\`tags: [code]\` 编码、\`tags: [theme]\` 主题、\`tags: [material]\` 材料（约定）。类型由标签决定，不由目录决定。
+- **实体类型**：frontmatter 的 \`tags\` 声明——\`code\` 编码、\`theme\` 主题、\`material\` 材料（约定）。类型由标签决定，不由目录决定。
+- **frontmatter 格式**：\`tags\` 一律写成 YAML 块式列表（\`tags:\` / \`  - code\`），不得写成内联数组 \`tags: [code]\`（Obsidian 官方要求 tags 为 YAML 列表）；\`definition\` 为标量字段；\`children\` 为父端声明的成员列表（YAML 列表，纯实体名）。
 - **块引用**：\`[[文件名#^id]]\`（文件名去扩展名）。块 ID 为 6 位 a-z0-9，行尾前置一个空格（\` ^xxxxxx\`）；已有 \`^id\` 直接复用，新 ID 全文查重。
-- **编码文件**：正文 = 块引用列表；\`definition\` 一句话定义；\`parent\` 声明层级（无 = 根级，深度 ≤ 5，不得成环）。
-- **主题文件**：正文 = 叙述性分析，可含块引用与 Mermaid 图。
-- **分析流程**：材料 →（自然编码）→ 编码 →（理论编码）→ 编码层级 →（凝练主题）→ 主题笔记。
+- **编码文件**：正文 = 块引用列表；\`definition\` 一句话定义；\`children\` 列出它直接包含的编码。同一编码可出现在多个父编码的 \`children\` 里（多父，用于并行试多套编码架构），但不得成环。
+- **主题文件**：正文 = 叙述性分析；\`children\` 列出它收录的编码与子主题（与编码同一套机制）。
+- **分析流程**：材料 →（自然编码）→ 编码 →（理论编码/重组 children）→ 编码层级 →（凝练主题）→ 主题笔记 →（导出）分析总表。
 - **技能**：本插件提供 \`qda-natural-coding\`（自然编码）、\`qda-theoretical-coding\`（理论编码）、\`qda-thematic-synthesis\`（凝练主题）三个技能，安装到你的技能目录（如 .agents/skills/、.claude/skills/）后按需调用。
 
 `;

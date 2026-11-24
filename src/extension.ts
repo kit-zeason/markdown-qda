@@ -10,6 +10,7 @@ import { LibraryProvider, registerLibraryCommands } from "./library";
 import {
 	CodeManagerProvider,
 	registerCodeManagerCommands,
+	registerEntityCommands,
 } from "./codeManager";
 import {
 	ThemeManagerProvider,
@@ -50,6 +51,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// ---- Agent 工作流配置（AGENTS.md + 技能注入） ----
 	registerAgentWorkflowCommand(context);
+
+	// ---- 实体关系命令（加入/移出父实体、迁移旧 parent） ----
+	registerEntityCommands(context);
 
 	// 库内容随 Markdown 文件变化自动刷新
 	const rescan = debounce(() => {
