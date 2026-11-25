@@ -1,132 +1,156 @@
 # Markdown QDA
 
-Markdown qualitative data analysis (QDA) extension for VS Code: generate **Foam / Obsidian-compatible block references** for Markdown paragraphs, copy them to the clipboard or append them to a target document with one click; the **Block Reference Library** sidebar manages coded snippets, the **Code Manager** manages codes, and the **Theme Manager** manages themes — a "paragraph ↔ code ↔ theme" linking workflow for qualitative research.
+Write a qualitative study in plain text: addressable material, citable codes, themes carrying their evidence, claims that can be checked — without opening an application.
+
+`v0.6.1` · MIT
 
 **English** · [简体中文](#中文介绍)
 
 > **Publishing status** ⚠️ Not yet published to the VS Code Marketplace / Open VSX. Install via the `.vsix` from the [Releases](https://github.com/kit-zeason/markdown-qda/releases) page, or build it yourself with `npm run package`. Marketplace publishing is planned.
 >
-> **发布状态** ⚠️ 本扩展**尚未发布到 VS Code Marketplace / Open VSX**，当前通过 [Release](https://github.com/kit-zeason/markdown-qda/releases) 提供 `.vsix` 安装包（或自行 `npm run package` 打包）。计划未来择机上架，届时更新本说明。
+> **发布状态** ⚠️ 本扩展**尚未发布到 VS Code Marketplace / Open VSX**，当前通过 [Release](https://github.com/kit-zeason/markdown-qda/releases) 提供 `.vsix` 安装包（或自行 `npm run package` 打包）。计划未来择机上架。
 
 ---
 
 ## English
 
-Markdown qualitative data analysis (QDA) extension for VS Code: generate **Foam / Obsidian-compatible block references** for Markdown paragraphs, copy them to the clipboard or append them to a target document with one click; the **Block Reference Library** sidebar manages coded snippets, the **Code Manager** manages codes, and the **Theme Manager** manages themes — a "paragraph ↔ code ↔ theme" linking workflow for qualitative research.
+Markdown QDA is a text-native method for qualitative analysis, implemented in Markdown and built on block-code-theme (BCT) as its infrastructure. Blocks make material addressable, codes cite blocks, themes cite codes.
 
-### Features
+This extension is the tooling for that method: three sidebar views (block references, codes, themes) and a few commands, all operating on the `.md` files in your own folder.
 
-#### 1. Copy Block Reference (copy only)
+### The idea: qualitative analysis as plain text
 
-- Place the cursor in a paragraph or select some text, then run **QDA: Copy Block Reference** (Command Palette or the editor context menu → "Copy Block Reference")
-- If the line does **not** have a block ID at its end: a `^xxxxxx` ID is appended automatically (6 characters, charset `a-z0-9`, matching Obsidian's auto-generated block IDs), and the block reference `[[note#^id]]` is copied to the clipboard
-- If the line **already has** a block ID: it is reused as-is, never duplicated
-- Generated block IDs are checked against the whole file to avoid conflicts
+Mainstream qualitative software stores the analysis as application state: passages, codes, codebooks, node trees and themes live inside a project file, unreadable without the package that wrote them. For solo work this is fine. But the moment the analysis has to go to a collaborator, a reviewer, a re-check, or an AI agent, the whole chain from material to claim must be readable, diffable and contestable outside the software.
 
-#### 2. Copy Block Reference To… (default `Ctrl+Alt+B`)
+Text-native coding puts that chain on an addressable plain-text surface:
 
-On top of feature 1, a **file picker** is shown:
+- a passage of material carries a stable **block** ID (`^k3f9x2`, Obsidian / Foam syntax);
+- a **code** is a Markdown file whose body lists block references and whose frontmatter carries the definition;
+- a **theme** is a Markdown file whose `children` list the codes it builds on and whose body carries the argument.
 
-- Lists all Markdown documents in the workspace; type keywords to filter, press Enter to select
-- You can also **type a new path directly** (e.g. `codes-stress.md`, subfolders supported: `subfolder/file.md`); pressing Enter creates the file
-- The reference (a bare `[[note#^id]]`, v1 format) is **appended to the end of the target document**, which then opens in a preview tab
+Material → block → code → theme → claim: every layer opens in an editor, greps, and diffs. The codebook becomes a citable object rather than a tree inside a package.
 
-> The clipboard also receives the reference, so you can paste it manually even if you cancel the document picker.
+The record is not tied to a school. Paper text, the appendix codebook and the software's node tree used to be three non-corresponding things; here they are readings of one record. Constant comparison, thematic analysis, framework analysis, computational text analysis and second-order analysis (re-coding published analyses as new material) can share the same files, because they share one layer: addressable passages, a citable codebook, themes that carry evidence. Changing school changes how the codebook and the themes are written, not the storage format, and rebuilds nothing — the same material can be thematically analysed in the morning and framework-analysed in the afternoon without exporting the data twice.
 
-#### 3. Sidebar: Block Reference Library
+Mixed methods follow the same route: statistical scripts, topic models and LLM pipelines read the same md and write back to the same md, so the divergence between human and machine, qualitative and computational, shows up in the text. Method boundaries then fall on how things are written, not on which package you own.
 
-Click the **QDA** icon in the Activity Bar to open the Block Reference Library:
+Plain text is not a universal solvent. Only material that can be rendered as text enters the record — audio and video through transcripts and time codes, images through the analyst's frame descriptions — and a transcript is not the recording. The format makes judgment checkable; it does not make it for you.
 
-- **Auto-collected**: every text snippet whose line ends with `^id` in the workspace Markdown files appears here automatically (refreshed on save, create, delete, and rename)
-- **Flat list**: all blocks are listed directly (not grouped by file); each block shows its content, with the block ID and source file as secondary info (e.g. `^a3f9xk · 访谈-01.md`)
-- **Hover actions**: two buttons appear on hover — **reveal the block in its file** and **copy the block reference**; clicking a block also jumps to the source
-- **Folder organization**: use "New Reference Folder" in the view title bar; right-click a block → "Move Snippet to Folder…" to organize; right-click a folder to rename or delete it (deleting a folder does not affect snippets; they return to unassigned)
-- **Delete block reference**: right-click a block → "Delete Block Reference" (with confirmation) — this **actually removes the trailing block ID from the source file**, the block disappears from the library, and existing `[[…]]` references stop resolving
-- **State persistence**: the folder structure is stored in VS Code `globalState`, **isolated per workspace**; snippets are never copied or moved — they always point to the original text
+### Minimal: BCT in three moves
 
-#### 4. Sidebar: Code Manager
+Three levels, three entity kinds, two kinds of edge; every edge connects adjacent levels.
 
-The second view under the **QDA** Activity Bar icon. **A code = a .md file whose frontmatter `tags` list contains `code`, with a body of block references** (e.g. `0-编码/AI编码.md` contains `[[访谈-01#^a3f9xk]]`). The extension scans the whole workspace and routes files by `tags`: `code` → Code Manager, `theme` → Theme Manager.
+| Level | Entity | File form | Edges |
+| --- | --- | --- | --- |
+| Block | a passage of material | trailing `^id` (6 chars, `a-z0-9`) | cited by codes |
+| Code | a `.md` with `tags: code` | body = block references; `definition`, `children` | collects blocks; may collect sub-codes |
+| Theme | a `.md` with `tags: theme` | body = argument; `children` = supporting codes | collects codes, flat, no nesting |
 
-- **Code list**: shows each code's **reference count** and **covered-material count** (e.g. `AI编码  3 条 · 2 份材料`); expand to see all segments, hover to jump to the source or copy the reference
-- **Define as Code**: click the tag icon in the title bar to open a **multi-select list of files and folders** (auto-skipping `.git` / `node_modules` / `.obsidian`); selected Markdown files are defined directly, selected folders recursively include all Markdown files inside; files that already declare a `code`/`theme` tag are skipped (existing declarations are never overwritten). After definition the entity identity lives in the frontmatter `tags` list (`- code`), so files can live anywhere in the workspace
-- **New code**: click `+` in the title bar, enter a name (definition optional), then **pick the folder** (defaults to the workspace root or the current file's folder); creation is **checked across the whole workspace**, so duplicate names are rejected
-- **Code operations**: click a code to open its file (definition and references); the context menu offers **Merge** (merge A's references into B, deduplicated, then delete A), Rename (references are unaffected), and Delete (moves to the recycle bin)
-- **Parent-child codes (multi-parent DAG)**: hover a code → "QDA: Add to Parent…" to list it in a parent's `children` field (and "Remove from Parent…" to detach). The relation is stored **on the parent** (`children` YAML list in its frontmatter), so a code can belong to several parents at once — that is how you try multiple coding architectures over the same evidence without touching the child files. Deleting a parent leaves children intact (they just lose that membership); **merging** moves the children and rewrites references to the target — you cannot merge into your own child code
-- **Entity declaration**: entity type is declared entirely by the frontmatter `tags` list (code → `code`, theme → `theme`; materials may declare `material` for clarity). Untagged Markdown files never enter the code/theme views — they are plain notes/materials, and their block references are still collected by the Block Reference Library
-- **Code definition**: the `definition:` field in the YAML frontmatter of the code file, shown on hover
-- **Export analysis summary**: the export button in the title bar writes a three-level Markdown list — theme → code → block — where every block appears as `[[material#^id]] — original text`, so the artifact stays readable (and rebuildable) without the extension. With no themes it degrades to a plain codebook
-- The Code Manager complements the Block Reference Library: **the library is the snippet view** (which paragraphs are coded), **the Code Manager is the code view** (which segments each code collects)
+A code may sit under several parents at once (multi-parent DAG): to try another coding architecture, create a parent code and list the existing sub-codes in it — no child file changes. Mainstream CAQDAS keeps a single classification tree, so switching schemes usually means rebuilding nodes; here it is one file.
 
-#### 5. Sidebar: Theme Manager
+Minimal example, three files.
 
-The third view under the **QDA** Activity Bar icon. **A theme = a .md file whose frontmatter `tags` list contains `theme`**; it is loosely defined: the body is narrative analysis (free-form writing, optionally with `Ctrl+Alt+B` block references to codes) rather than a plain list of references.
-
-- **Theme list**: shows all themes; the same `children` mechanism as codes is used — a theme's members may be codes or sub-themes; hover for the definition
-- **Define as Theme**: click the tag icon in the title bar — the same interaction as Define as Code, but writing the `theme` tag to selected files or folders
-- **New theme**: click `+` in the title bar, enter a name (definition optional), pick the folder — a file with the `theme` tag in frontmatter is created; creation is checked across the whole workspace
-- **Theme operations**: right-click to add it to a parent theme / remove from parent / rename / delete (recycle bin)
-- Codes and themes share the same source: a .md file is either a code (tag `code`) or a theme (tag `theme`), declared by frontmatter rather than by its directory
-
-#### 6. Agent Workflow Setup (`QDA: Setup Agent Workflow`)
-
-Leverage your installed agents (pi / Claude Code / DeepSeek Harness, etc.) for automated analysis — the extension does **not** embed an LLM:
-
-- **Writes AGENTS.md**: adds a QDA collaboration section (entity contract + block-reference rules + analysis pipeline) to the project-root AGENTS.md, readable by every agent following the agents.md convention; idempotent on re-run (replaces the old section)
-- **Skill templates**: copies 3 SKILL.md templates to `.qda/agent-skills/` (editable; re-run the command to apply changes)
-- **Skill injection**: check target agent directories — `.agents/skills/` (pi + dsh + agents.md agents), `.claude/skills/` (Claude Code), `.pi/skills/`, `.dsh/skills/`; existing directories are pre-checked; skills are copied automatically and take effect after the agent restarts
-- **The three skills**: `qda-natural-coding` (materials → codes), `qda-theoretical-coding` (codes → theoretical codes), `qda-thematic-synthesis` (codes → theme notes + Mermaid causal diagrams); none depend on VS Code extension commands — agents read/write Markdown directly
-
-### Usage Example
-
-Transcript `访谈-01.md`:
+*`20260810-interview-A.md`*
 
 ```markdown
-受访者A：我觉得压力主要来自工作负荷。
+Interviewee A: I have to compare everything again each time — too tiring. I'd rather wait for a big sale. ^k3f9x2
 ```
 
-Place the cursor on the paragraph → `Ctrl+Alt+B` → type `编码-压力` in the picker and press Enter → the line becomes:
+*`Price sensitivity comes from comparison cost.md`*
 
 ```markdown
-受访者A：我觉得压力主要来自工作负荷。 ^a3f9xk
+---
+tags:
+  - code
+definition: High comparison cost makes price sensitivity show up as delayed decisions
+children:
+  - Special offers only resolve short-term hesitation
+---
+[[20260810-interview-A#^k3f9x2]]
+[[20260812-interview-B#^z2w8n6]]
 ```
 
-The target document `编码-压力.md` gets this appended at its end:
+*`Promotions read as a signal to keep waiting.md`*
 
 ```markdown
-[[访谈-01#^a3f9xk]]
+---
+tags:
+  - theme
+definition: When comparison costs are high, promotions are read as a signal to keep waiting
+children:
+  - Price sensitivity comes from comparison cost
+  - Special offers only resolve short-term hesitation
+---
+For users with high comparison costs, a promotion is not a discount but a signal to "wait a bit"… (argument)
 ```
 
-The snippet also appears in the Block Reference Library:
+The whole primitive set is: give a block an ID and cite it, add a block or an entity to a code, add a code to a theme, change identity by changing `tags`, export the analysis table, write the agent contract. Each of those is one line or one field of plain text; writing them by hand is fully equivalent. Being usable without this extension is a design requirement, not a fallback.
 
-```text
-受访者A：我觉得压力主要来自工作负荷。 ^a3f9xk · 访谈-01.md
-```
+**Deliberately not:**
 
-Hover to reveal/copy; right-click to move it into a `压力` folder or delete the block reference.
+- no embedded LLM; no retrieval, clustering, NLP or statistics — other tools do that;
+- no account, no cloud sync, no database;
+- no proprietary format; no PDF / HTML export (it would break `[[...]]` links);
+- no "memo" entity: in a text-native environment a memo is a usage pattern, not a file type;
+- no prescribed folder layout — identity lives in the frontmatter `tags`, files can live anywhere.
 
-Once `0-编码/AI编码.md` declares the `code` tag (or you select it in the Code Manager and click **Define as Code**), it shows as one code (`AI编码 1 条 · 1 份材料`); expand it to see all segments collected under it.
+**Plug in instead:** Obsidian / Foam parse the same block references, Dataview and the tag pane query the same tags, `git` handles versions and diffs, `ripgrep` finds codes and citations, pandoc drafts the paper, Zotero handles references, Python / R do statistics and topic models, and any LLM agent joins through `AGENTS.md`. Text as the platform means the only interface between these tools is the file.
 
-Theme example: add the `theme` tag to `0-编码/主题-合作编码.md` and it appears in the Theme Manager view (sharing the same folder with codes without interference).
+### Data sovereignty: who holds the files
 
-### Design Philosophy
+- No account, no telemetry, no network. Files live on your disk; how you sync them (git / OneDrive / Syncthing) is your call.
+- The format is the artifact: delete the extension and material, codes, themes and the export table still read, edit and re-parse. The extension removes the mechanical labour of writing `^id` and reference lists; it does not hold your data.
+- The analysis table is a generated artifact and an acceptance test: theme → code → block, each block as `[[material#^id]] — original text`. `cat` and `grep` can rebuild that table from the source files, which is what makes the record text-native in fact rather than in claim.
+- Sovereignty has costs: backups, sync conflicts and what agents may write are yours to manage.
 
-**There is no dedicated "memo" entity — by design.** In a text-native, Markdown-based working environment, a memo is not a distinct kind of artifact but a *usage pattern realized on top of the general document type*: any Markdown file — meeting notes, an analytic memo, a code file, a theme note, even a scratch file — can be made to serve as a memo, because the unit of record is the file, not the application. Introducing a dedicated memo type would add no expressive capacity; it would only constrain where a researcher is permitted to write.
+### Agent access: a contract, not a model
 
-The extension follows the corresponding principle of generality: it offers only the primitive operation of citing a segment — copying its block reference to the clipboard, or appending it to a document the researcher names — and leaves the choice of destination to the analyst, who moves the cited passage into whichever Markdown note is analytically appropriate at that moment. "Copy Block Reference To…" is a convenience wrapper over this general mechanism rather than a memo-specific feature: the memo is instantiated by the researcher's own file organisation, not by the tool.
+The extension contains no LLM and does not pick a vendor for you. `QDA: Setup Agent Workflow` does three things:
+
+1. writes the collaboration contract into the project-root `AGENTS.md` — entity contract, block-reference rules, analysis pipeline;
+2. copies three `SKILL.md` templates to `.qda/agent-skills/` (editable; re-run the command to apply changes);
+3. installs the skills into the directories you tick: `.agents/skills/`, `.claude/skills/`, `.pi/skills/`, `.dsh/skills/`.
+
+The agent reads and writes the same md you do: it can add block references, propose candidate codes against the codebook, check that a theme's supporting codes resolve, and report themes with no evidence. Its output is a diff — you read it, reject it, revert it.
+
+The boundary is fixed: interpretation stays with the analyst, the agent does checkable mechanical work. Every write stays in the text, where the next collaborator — or the next agent — can re-check it. That is what this record has over pasting material into a chat window.
+
+### Quick start
+
+1. Install the `.vsix` (Releases page, or build with `npm run package`) and open your research folder in VS Code.
+2. Put the cursor in a material paragraph and press `Ctrl+Alt+B`; pick a code file. The line gains a block ID and `[[note#^id]]` is appended to that file as a list item.
+3. Give code and theme files `tags` (YAML block list), or select files and run `QDA: Define as Code` / `QDA: Define as Theme`; the sidebar views pick them up. Build the three levels with "Add to Code…" / "Add to Theme…".
+4. Run `QDA: Setup Agent Workflow` when you want an agent in the loop.
+5. Run `QDA: Export Analysis Summary` at the end, as a paper appendix or an audit artifact.
+
+### Status and roadmap
+
+- Implemented: block IDs and the block reference library, code manager (multi-parent DAG), theme manager (flat), three-level analysis export, agent workflow setup.
+- Next: a versioned specification, validator and conformance suite, so "usable without this extension" becomes a testable promise; argument constraints on themes (warnings, not gates).
+- Not doing: see "Minimal".
 
 ### Compatibility
 
-- **Foam**: `^id` block anchors + `[[note#^id]]` block references are natively supported by Foam; pasted references are clickable
-- **Obsidian**: the block reference syntax is identical to Obsidian's; the same files can be opened, parsed, and embedded in Obsidian
-- Block ID rules follow Obsidian: letters, digits, hyphens; preceded by one space at the end of the line
-- **Obsidian frontmatter**: entity types are declared with the `code` / `theme` / `material` tags in a YAML **block list** (as Obsidian requires), directly queryable by Obsidian's tag pane and Dataview:
+- **Foam / Obsidian**: `^id` anchors and `[[note#^id]]` block references are the native syntax of both; the same files parse in either.
+- **frontmatter**: `tags` is always a YAML block list (what Obsidian requires), so Obsidian's tag pane and Dataview can query it directly:
 
 ```yaml
 ---
 tags:
   - code
 ---
+```
+
+### Documentation
+
+Architecture decisions and design notes live in `docs/` (`docs/README.md` is the index); that folder is excluded from the vsix.
+
+### Development
+
+```bash
+npm install
+npm run compile          # compile
+npm run package          # package a .vsix into releases/
 ```
 
 ### Keybindings
@@ -136,133 +160,153 @@ tags:
 | QDA: Copy Block Reference To… | `Ctrl+Alt+B` (Markdown files) |
 | QDA: Copy Block Reference | none (Command Palette / context menu) |
 
-### UI Language
+### UI language
 
-The extension UI supports Chinese and English and switches automatically with the VS Code display language (Simplified Chinese UI in Chinese environments, English otherwise).
+The UI supports Chinese and English and follows the VS Code display language.
 
-### Development
-
-```bash
-npm install
-npm run compile          # compile
-npm run package          # package .vsix into the releases/ directory
-```
+---
 
 ## 中文介绍
 
-### 功能
+把一个定性研究项目写成一组纯文本：材料可寻址、编码可引用、主题带证据、论断可被检查——不需要打开某个应用。
 
-#### 1. 复制块引用（仅复制）
+Markdown QDA 是一套 text-native（文本本位）的定性分析方法，在 Markdown 上实现，以 block-code-theme（BCT）为基础设施。块让材料可寻址，编码引用块，主题引用编码。
 
-- 光标位于段落中，或选中一段文本，执行 **QDA: 复制块引用**（命令面板或右键菜单 →「复制块引用」）
-- 若该段落行尾**没有**块 ID：自动追加一个 `^xxxxxx`（6 位，字符集 `a-z0-9`，与 Obsidian 自动生成的块 ID 一致），并复制块引用 `[[文件名#^id]]` 到剪贴板
-- 若行尾**已有**块 ID：直接复用，不会重复叠加
-- 生成的块 ID 在文件内查重，避免与已有 ID 冲突
+本扩展是这套方法的配套工具：三个侧边栏视图（块引用库、编码、主题）加几条命令，操作对象全部是你文件夹里的 `.md`。
 
-#### 2. 复制块引用至…（默认 `Ctrl+Alt+B`）
+### 构想：把定性分析写进纯文本
 
-在功能 1 的基础上，额外弹出**文件检索框**：
+主流定性分析软件把分析存成应用状态：段落、编码、编码本、节点树、主题都在项目文件里，离开软件就读不出来。对个人使用，这没有大问题；但分析一旦要交给合作者、评审、复核，或者一个 AI agent，从材料到论断的整条证据链就必须能脱离软件被读、被 diff、被质疑。
 
-- 列出工作区所有 Markdown 文档，输入关键字筛选，回车即选中
-- 也可以**直接输入新路径**（如 `编码-压力.md`，支持 `子目录/文件名.md`），回车创建该文件
-- 引用（裸引用 `[[文件名#^id]]`，v1 格式）自动**追加到目标文档末尾**，并在预览页中打开目标文档
+Text-native 的做法是把这条证据链放在一个可寻址的纯文本面上：
 
-> 剪贴板同样会得到该引用，即使取消选择目标文档，也可手动粘贴。
+- 材料里的一个段落有稳定块（block） ID（`^k3f9x2`，Obsidian / Foam 语法）；
+- 编码（code）是一个 Markdown 文件，正文是块引用列表，定义写在 frontmatter；
+- 主题是（theme）一个 Markdown 文件，`children` 列出支撑它的编码，正文写论述。
 
-#### 3. 侧边栏「块引用库」
+材料 → 块 → 编码 → 主题 → 论断，每一层都是编辑器能打开、`grep` 能搜、`git` 能对比的文件。编码本从"软件里的一棵树"变成可引用的对象。
 
-点击活动栏的 **QDA** 图标，打开块引用库：
+这个记录不绑定某个流派。论文正文、附录里的编码本、软件里的节点树原本是三份互不对应的东西，在这里是同一份记录的不同读法。持续比较、主题分析、框架分析、计算文本分析、二次分析（把已发表的分析当材料再编码）可以共用同一批文件，因为它们共用的是同一层：可寻址的段落、可引用的编码本、带证据的主题。换流派只换编码本和主题的写法，不换存储格式，也不重做文件——同一批材料上午做主题分析、下午做框架分析，不必导两次数据。
 
-- **自动收集**：工作区所有 Markdown 文件中行尾带 `^id` 的文本片段会自动出现在库中（文件保存、新建、删除、重命名时自动刷新）
-- **块内容列表**：所有块直接罗列（不再按文件分组），每块显示块内容，次要信息行显示块编码与来源文件（如 `^a3f9xk · 访谈-01.md`）
-- **悬停快捷操作**：鼠标悬停在块上出现两个按钮——**跳转到块所在位置**、**复制块引用**；单击块同样跳到原文
-- **文件夹整理**：视图标题栏的「新建引用文件夹」按钮可新建文件夹；右键块 →「移动片段到文件夹…」归类；右键文件夹可重命名、删除（删除文件夹不影响片段，片段回到未分类）
-- **删除块引用**：右键块 →「删除块引用」（需二次确认），会**真正从源文件中去掉行尾的块 ID**，该块即从库中消失，已引用它的 `[[…]]` 将失效
-- **状态保存**：文件夹结构保存在 VS Code 的 `globalState` 中，**按工作区隔离**，切换项目互不影响；片段本身不复制、不移动，始终指向原文
+混合方法同理：统计脚本、主题模型、LLM 管线读同一批 md，产出写回同一批 md，人机之间、质性与计算之间的差异就落在文本上。方法之间的界线于是落在写法上，而不落在软件上。
 
-#### 4. 侧边栏「编码管理」
+纯文本也不是万能溶剂：只有能文本化的材料进入记录（音频视频靠转写与时间码，图像靠研究者写的画面描述），转写不等同于听原声；格式让判断可检查，但不替你做判断。
 
-活动栏 **QDA** 图标下第二个视图。**编码 = frontmatter 的 `tags` 列表含 `code` 的 md 文件，内容为块引用列表**（如 `0-编码/AI编码.md` 里放着 `[[访谈-01#^a3f9xk]]`）。扩展扫描整个工作区，按 `tags` 分流：含 `code` → 编码视图，含 `theme` → 主题视图。
+### 极简：只给 BCT 三个动作
 
-- **编码列表**：显示每个编码的**引用数**与**覆盖材料数**（如 `AI编码  3 条 · 2 份材料`）；展开可见全部片段，悬停可跳转原文、复制引用
-- **定义为编码**：标题栏按钮（标签图标），弹出**文件与文件夹多选列表**（自动跳过 `.git`/`node_modules`/`.obsidian`）；选中单个/多个 Markdown 文件直接定义，选中文件夹 = 递归包含其下全部 Markdown；已声明 `code`/`theme` 标签的文件自动跳过（不覆盖既有声明）。定义后实体身份由 frontmatter `tags` 列表（`- code`）决定，文件可放在工作区任意位置
-- **新建编码**：标题栏 `+`，输入名称（可选定义）后**选择存放目录**（默认工作区根或当前活动文件目录）；新建时**全工作区查重**，跨目录同名直接阻止
-- **编码操作**：单击编码打开编码文件（查看定义与引用列表）；右键菜单依次为**合并**（把 A 的引用并入 B 去重后删 A）、重命名（引用不受影响）、删除（回收站可恢复）
-- **父子编码（多父 DAG）**：悬停编码 →「QDA: 加入父实体…」把本编码列进某个父编码的 `children`（「从父实体移出…」解除）。关系写在**父端**（父编码 frontmatter 的 `children` 列表），所以一个编码可以同时属于多个父编码——换一套编码架构只需新建一个父编码把现成编码列进去，子文件一个都不动。删除父编码时子编码不受影响（只是失去这一层归属）；**合并**时子编码与全库引用一并改挂到目标，不能合并进自己的子编码
-- **实体声明**：实体类型完全由 frontmatter `tags` 列表声明（编码 → `code`，主题 → `theme`，材料可声明 `material` 以明确身份）；无标签的 Markdown 文件不进入编码/主题视图，其块引用照常由块引用库收集
-- **编码定义**：代码文件头部 YAML frontmatter 的 `definition:` 字段，悬停编码时显示
-- **导出分析总表**：标题栏导出按钮，生成「主题 → 编码 → 块」三级清单，每个块都给 `[[材料#^id]] — 原文`；脱离插件也能读、能 diff、agent 可用 `cat`/`grep` 重建。工作区没有主题时自然退化为编码本
-- 编码与块引用库互补：**块引用库是片段视角**（哪些段落被编码），**编码管理是代码视角**（每个编码收了哪些段落）
+三级架构，三种实体，两条边：边只连相邻两级。
 
-#### 5. 侧边栏「主题管理」
+| 层级 | 实体 | 文件形态 | 关系 |
+| --- | --- | --- | --- |
+| Block | 材料里的一个段落 | 行尾 `^id`（6 位，`a-z0-9`） | 被编码引用 |
+| Code | `tags: code` 的 md | 正文 = 块引用列表；`definition`、`children` | 收块；可收子编码 |
+| Theme | `tags: theme` 的 md | 正文 = 论述；`children` = 支撑编码 | 收编码，平铺不嵌套 |
 
-活动栏 **QDA** 图标下第三个视图。**主题 = frontmatter 的 `tags` 列表含 `theme` 的 md 文件**，定义较松：正文是叙述性分析（可自由书写，也可用 `Ctrl+Alt+B` 引用编码片段），无需像编码那样是纯块引用列表。
+编码可以同时属于多个父编码（多父 DAG）：要换一套编码架构，就新建一个父编码把现成的子编码列进去，子文件一个都不动。主流 CAQDAS 只有一棵分类树，换方案往往等于重做节点——这里只是一次写一个文件。
 
-- **主题列表**：显示全部主题；与编码共用同一套 `children` 机制——主题的成员可以是编码或子主题；悬停查看定义
-- **定义为主题**：标题栏按钮（标签图标），与「定义为编码」同一交互——选中文件或文件夹批量写入 `theme` 标签
-- **新建主题**：标题栏 `+`，输入名称（可选定义）后选择存放目录，自动生成带 `theme` 标签 frontmatter 的文件；新建时全工作区查重
-- **主题操作**：右键可加入父主题 / 从父实体移出 / 重命名 / 删除（回收站可恢复）
-- 编码与主题同源：一个 md 文件要么是编码（标签 `code`），要么是主题（标签 `theme`），由 frontmatter 声明而非所在目录决定
+最小示例，三份文件。
 
-#### 6. Agent 工作流配置（`QDA: 配置 Agent 工作流`）
-
-复用你已安装的 agent（pi / Claude Code / DeepSeek Harness 等）做自动分析，插件**不内嵌 LLM**：
-
-- **写入 AGENTS.md**：在项目根 AGENTS.md 写入 QDA 协作规则（实体契约 + 块引用规则 + 分析流程），agents.md 规范下的所有 agent 都能读取；重复运行幂等（替换旧段）
-- **技能模板**：3 个 SKILL.md 模板复制到 `.qda/agent-skills/`（可编辑，改后重跑命令生效）
-- **技能注入**：勾选目标 agent 目录——`.agents/skills/`（pi + dsh + agents.md 规范系）、`.claude/skills/`（Claude Code）、`.pi/skills/`、`.dsh/skills/`；已存在的目录默认选中，自动复制技能，重启 agent 生效
-- **三个技能**：`qda-natural-coding`（材料→编码）、`qda-theoretical-coding`（编码→理论编码）、`qda-thematic-synthesis`（编码→主题笔记 + Mermaid 因果图），均不依赖 VS Code 扩展命令，agent 直接读写 Markdown
-
-### 用法示例
-
-转录稿 `访谈-01.md`：
+*`20260810-访谈A.md`*
 
 ```markdown
-受访者A：我觉得压力主要来自工作负荷。
+受访者A：每次都要重新比一遍，太累了，不如等大促。 ^k3f9x2
 ```
 
-光标停在该段 → `Ctrl+Alt+B` → 检索框输入 `编码-压力` 回车 → 该行变为：
+*`价格敏感来自比价成本.md`*
 
 ```markdown
-受访者A：我觉得压力主要来自工作负荷。 ^a3f9xk
+---
+tags:
+  - code
+definition: 比价成本高使价格敏感表现为推迟决策
+children:
+  - 促销只解决短期犹豫
+---
+[[20260810-访谈A#^k3f9x2]]
+[[20260812-访谈B#^z2w8n6]]
 ```
 
-目标文档 `编码-压力.md` 末尾自动追加：
+*`促销被读成"再等等"的信号.md`*
 
 ```markdown
-[[访谈-01#^a3f9xk]]
+---
+tags:
+  - theme
+definition: 比价成本高时，促销被解释为继续观望的信号
+children:
+  - 价格敏感来自比价成本
+  - 促销只解决短期犹豫
+---
+比价成本高的用户不把促销当优惠，而是当"再等等"的信号……（论述）
 ```
 
-侧边栏「块引用库」中会同时出现该片段：
+整个原语集合只有这几件事：给块发 ID 并引用、把块或实体加进编码、把编码加进主题、改 tags 换身份、导出分析总表、写入 agent 契约。每个动作在纯文本里都是加一行或改一个字段，手写完全等价。"可以不用这个插件"是设计要求，不是兜底。
 
-```text
-受访者A：我觉得压力主要来自工作负荷。 ^a3f9xk · 访谈-01.md
-```
+**刻意不做**
 
-悬停可跳转/复制，右键可归入 `压力` 文件夹或删除块引用。
+- 不内嵌 LLM，不做检索、聚类、NLP、统计——这些交给别的工具；
+- 不做账号、云同步、数据库；
+- 不定义专有格式，不导出 PDF / HTML（那会让 `[[...]]` 链接失效）；
+- 不设"备忘录"实体：在文本本位环境里，备忘录是一种使用方式，不是一种文件类型；
+- 不规定目录结构：实体身份由 frontmatter `tags` 声明，文件放哪都行。
 
-给 `0-编码/AI编码.md` 声明 `code` 标签（或在「编码管理」视图选中它点击「定义为编码」），它就会显示为一行编码（`AI编码 1 条 · 1 份材料`），展开即该编码下收录的全部片段。
+**外接即可**：Obsidian / Foam 解析同一套块引用，Dataview 与标签面板能查同一套 tags，`git` 管版本与 diff，`ripgrep` 找编码与引用，pandoc 出稿，Zotero 接引文，Python / R 做统计与主题模型，任意 LLM agent 通过 `AGENTS.md` 接入。"以文本为平台"的意思是：这些工具之间唯一的接口是文件。
 
-主题示例：给 `0-编码/主题-合作编码.md` 写入 `theme` 标签，它就会出现在「主题管理」视图（与编码共处同一文件夹互不干扰）。
+### 数据主权：文件在谁手里
 
-### 设计理念
+- 无账号、无遥测、不联网。所有文件在你的磁盘上，用什么同步（git / OneDrive / Syncthing）由你决定。
+- 格式即产物：删掉扩展，材料、编码、主题、导出表仍然能读、能改、能被重新解析。插件省掉的是手写 `^id` 与引用列表的机械劳动，不持有数据。
+- 分析总表是生成物，也是验收物：「主题 → 编码 → 块」三级清单，每块给 `[[材料#^id]] — 原文`。只用 `cat` / `grep` 就能从源文件重建这张表，说明记录确实是文本原生的。
+- 代价跟着主权来：备份、同步冲突、agent 的写权限，都由你自己管。
 
-**不设专门的「备忘录」实体，这是有意的设计。** 在以文本为本位（text-native）的 Markdown 工作环境中，备忘录并非一种独立的文档类型，而是叠加在通用文档类型之上的**使用模式**：任何 Markdown 文件——会议纪要、分析备忘、编码文件、主题笔记，乃至临时草稿——都可以承担当备忘录的职能，因为记录的单位是文件，而不是某个应用。专门为备忘录另立一种类型，不会增加表达能力，只会对研究者「可以写在哪里」施加约束。
+### Agent 接入：给契约，不给模型
 
-扩展遵循相应的**一般性原则**：只提供「引用片段」这一原语操作——把块引用复制到剪贴板，或追加到研究者指名的文档——把落地位置的选择权留给分析者，由其把被引段落移入当下在分析上最恰当的那份 Markdown 笔记。「复制块引用至…」只是这一通用机制的便利封装，而非一项备忘录专属功能：备忘录由研究者自己的文件组织方式实例化，而非由工具指定。
+扩展不含 LLM，也不替你选供应商。`QDA: 配置 Agent 工作流` 做三件事：
+
+1. 把协作契约写进项目根 `AGENTS.md`——实体契约、块引用规则、分析流水线；
+2. 把 3 个 `SKILL.md` 模板复制到 `.qda/agent-skills/`（可改，重跑命令生效）；
+3. 按你勾选的目录，把技能注入 `.agents/skills/`、`.claude/skills/`、`.pi/skills/`、`.dsh/skills/`。
+
+agent 读写的就是你手上这批 md：它可以补块引用、按编码本给候选编码、核对主题的支撑编码是否悬空、报告"没有证据的主题"。产出是 diff，你能看、能拒、能回退。
+
+边界写死：分析判断留在人这边，agent 做可检查的机械工作。每次写入都留在文本里，可被下一个合作者或下一个 agent 复核——这是它相对"把材料贴进聊天框"站得住的地方。
+
+### 快速开始
+
+1. 装 `.vsix`（Releases 页，或自行 `npm run package`），用 VS Code 打开研究文件夹。
+2. 光标停在材料段落，`Ctrl+Alt+B` 选一个编码文件：段落得到 `^id`，引用 `[[文件名#^id]]` 以列表项追加进该文件。
+3. 给编码 / 主题文件写 `tags`（YAML 块式列表），或选中文件执行 `QDA: 定义为编码` / `QDA: 定义为主题`，侧边栏出现实体；用「加入编码…」「加入主题…」把三级结构搭起来。
+4. 需要 agent 时运行 `QDA: 配置 Agent 工作流`。
+5. 分析结束时运行 `QDA: 导出分析总表`，作为论文附录或审计件。
+
+### 现状与路线
+
+- 已实现：块引用与块引用库、编码管理（多父 DAG）、主题管理（平铺）、三级分析总表导出、agent 工作流配置。
+- 待做：把格式写成版本化规范 + 校验器 + 一致性测试，让"不用本扩展也能用"成为可验证的承诺；主题的论述约束（提示而非门禁）。
+- 不做：见「极简」一节。
 
 ### 兼容性
 
-- **Foam**：`^id` 块锚点 + `[[note#^id]]` 块引用，Foam 原生支持，粘贴后可跳转
-- **Obsidian**：块引用语法与 Obsidian 完全一致，同一文件可在 Obsidian 中打开、解析、嵌入
-- 块 ID 规则对齐 Obsidian：字母、数字、连字符；行尾前置一个空格
-- **Obsidian frontmatter**：实体类型用 `code` / `theme` / `material` 标签声明，写成 YAML **块式列表**（Obsidian 要求 tags 必须是列表），Obsidian 的标签面板与 Dataview 可直接检索：
+- **Foam / Obsidian**：`^id` 锚点与 `[[note#^id]]` 块引用是两者原生语法，同一批文件都能解析。
+- **frontmatter**：`tags` 一律写成 YAML 块式列表（Obsidian 要求），Obsidian 标签面板与 Dataview 可直接检索：
 
 ```yaml
 ---
 tags:
   - code
 ---
+```
+
+### 文档
+
+架构决策与构想见 `docs/`（`docs/README.md` 为索引），该目录不进 vsix。
+
+### 开发
+
+```bash
+npm install
+npm run compile          # 编译
+npm run package          # 打包 .vsix 到 releases/ 目录
 ```
 
 ### 键绑定
@@ -274,15 +318,7 @@ tags:
 
 ### 界面语言
 
-扩展界面支持中/英文，随 VS Code 的显示语言自动切换（简体中文环境显示中文，其他语言环境显示英文）。
-
-### 开发
-
-```bash
-npm install
-npm run compile          # 编译
-npm run package          # 打包 .vsix 到 releases/ 目录
-```
+扩展界面支持中/英文，随 VS Code 的显示语言自动切换。
 
 ---
 
