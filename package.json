@@ -2,7 +2,7 @@
     "name": "markdown-qda",
     "displayName": "Markdown QDA",
     "description": "%mdqda.description%",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "publisher": "ZeasonGuo",
     "author": "GUO Zeason",
     "l10n": "./l10n",
@@ -38,16 +38,17 @@
         "onView:mdqda.blockRefLibrary",
         "onCommand:mdqda.codeManager.refresh",
         "onCommand:mdqda.codeManager.newCode",
+        "onCommand:mdqda.codeManager.newChildCode",
         "onCommand:mdqda.codeManager.markAsCodeBulk",
         "onCommand:mdqda.codeManager.openCodeFile",
-        "onCommand:mdqda.entity.addToParent",
+        "onCommand:mdqda.entity.addToCode",
+        "onCommand:mdqda.entity.addToTheme",
         "onCommand:mdqda.entity.removeFromParent",
         "onCommand:mdqda.migrate.parentToChildren",
         "onCommand:mdqda.codeManager.renameCode",
         "onCommand:mdqda.codeManager.deleteCode",
         "onCommand:mdqda.codeManager.mergeCodes",
-        "onCommand:mdqda.codeManager.revealSegment",
-        "onCommand:mdqda.codeManager.copySegmentRef",
+        "onCommand:mdqda.codeManager.convertToTheme",
         "onCommand:mdqda.codeManager.exportAnalysis",
         "onView:mdqda.codeManager",
         "onCommand:mdqda.themeManager.refresh",
@@ -56,7 +57,8 @@
         "onCommand:mdqda.themeManager.deleteTheme",
         "onCommand:mdqda.themeManager.markAsThemeBulk",
         "onView:mdqda.themeManager",
-        "onCommand:mdqda.setupAgentWorkflow"
+        "onCommand:mdqda.setupAgentWorkflow",
+        "onCommand:mdqda.entity.removeFromTheme"
     ],
     "contributes": {
         "commands": [
@@ -127,12 +129,20 @@
                 "title": "%mdqda.command.codeManager.openCodeFile%"
             },
             {
-                "command": "mdqda.entity.addToParent",
-                "title": "%mdqda.command.entity.addToParent%"
+                "command": "mdqda.entity.addToCode",
+                "title": "%mdqda.command.entity.addToCode%"
+            },
+            {
+                "command": "mdqda.entity.addToTheme",
+                "title": "%mdqda.command.entity.addToTheme%"
             },
             {
                 "command": "mdqda.entity.removeFromParent",
                 "title": "%mdqda.command.entity.removeFromParent%"
+            },
+            {
+                "command": "mdqda.entity.removeFromTheme",
+                "title": "%mdqda.command.entity.removeFromTheme%"
             },
             {
                 "command": "mdqda.migrate.parentToChildren",
@@ -151,12 +161,12 @@
                 "title": "%mdqda.command.codeManager.mergeCodes%"
             },
             {
-                "command": "mdqda.codeManager.revealSegment",
-                "title": "%mdqda.command.codeManager.revealSegment%"
+                "command": "mdqda.codeManager.convertToTheme",
+                "title": "%mdqda.command.codeManager.convertToTheme%"
             },
             {
-                "command": "mdqda.codeManager.copySegmentRef",
-                "title": "%mdqda.command.codeManager.copySegmentRef%"
+                "command": "mdqda.codeManager.newChildCode",
+                "title": "%mdqda.command.codeManager.newChildCode%"
             },
             {
                 "command": "mdqda.codeManager.exportAnalysis",
@@ -238,11 +248,23 @@
                     "when": "false"
                 },
                 {
+                    "command": "mdqda.codeManager.convertToTheme",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.codeManager.newChildCode",
+                    "when": "false"
+                },
+                {
                     "command": "mdqda.codeManager.openCodeFile",
                     "when": "false"
                 },
                 {
-                    "command": "mdqda.entity.addToParent",
+                    "command": "mdqda.entity.addToCode",
+                    "when": "false"
+                },
+                {
+                    "command": "mdqda.entity.addToTheme",
                     "when": "false"
                 },
                 {
@@ -250,11 +272,7 @@
                     "when": "false"
                 },
                 {
-                    "command": "mdqda.codeManager.revealSegment",
-                    "when": "false"
-                },
-                {
-                    "command": "mdqda.codeManager.copySegmentRef",
+                    "command": "mdqda.entity.removeFromTheme",
                     "when": "false"
                 },
                 {
@@ -327,26 +345,6 @@
             ],
             "view/item/context": [
                 {
-                    "command": "mdqda.blockRefLibrary.renameFolder",
-                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaFolder",
-                    "group": "inline@1"
-                },
-                {
-                    "command": "mdqda.blockRefLibrary.deleteFolder",
-                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaFolder",
-                    "group": "inline@2"
-                },
-                {
-                    "command": "mdqda.blockRefLibrary.revealSnippet",
-                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaSnippet",
-                    "group": "inline@1"
-                },
-                {
-                    "command": "mdqda.blockRefLibrary.copySnippetRef",
-                    "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaSnippet",
-                    "group": "inline@2"
-                },
-                {
                     "command": "mdqda.blockRefLibrary.moveSnippet",
                     "when": "view == mdqda.blockRefLibrary && viewItem == mdqdaSnippet",
                     "group": "1_move@1"
@@ -357,59 +355,59 @@
                     "group": "1_move@2"
                 },
                 {
+                    "command": "mdqda.entity.addToCode",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "1_rel@1"
+                },
+                {
+                    "command": "mdqda.entity.addToTheme",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "1_rel@2"
+                },
+                {
+                    "command": "mdqda.entity.removeFromParent",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "1_rel@3"
+                },
+                {
+                    "command": "mdqda.codeManager.convertToTheme",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "2_conv@1"
+                },
+                {
+                    "command": "mdqda.codeManager.newChildCode",
+                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
+                    "group": "3_new@1"
+                },
+                {
                     "command": "mdqda.codeManager.renameCode",
                     "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
-                    "group": "1_merge@2"
+                    "group": "4_manage@1"
                 },
                 {
                     "command": "mdqda.codeManager.deleteCode",
                     "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
-                    "group": "1_merge@3"
-                },
-                {
-                    "command": "mdqda.codeManager.mergeCodes",
-                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
-                    "group": "1_merge@1"
-                },
-                {
-                    "command": "mdqda.entity.addToParent",
-                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
-                    "group": "inline@1"
-                },
-                {
-                    "command": "mdqda.entity.removeFromParent",
-                    "when": "view == mdqda.codeManager && viewItem == mdqdaCode",
-                    "group": "inline@2"
-                },
-                {
-                    "command": "mdqda.codeManager.revealSegment",
-                    "when": "view == mdqda.codeManager && viewItem == mdqdaCodeSegment",
-                    "group": "inline@1"
-                },
-                {
-                    "command": "mdqda.codeManager.copySegmentRef",
-                    "when": "view == mdqda.codeManager && viewItem == mdqdaCodeSegment",
-                    "group": "inline@2"
-                },
-                {
-                    "command": "mdqda.entity.addToParent",
-                    "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
-                    "group": "inline@1"
+                    "group": "4_manage@2"
                 },
                 {
                     "command": "mdqda.entity.removeFromParent",
                     "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
-                    "group": "inline@2"
+                    "group": "1_rel@1"
+                },
+                {
+                    "command": "mdqda.entity.removeFromTheme",
+                    "when": "view == mdqda.themeManager && viewItem == mdqdaCode",
+                    "group": "1_rel@1"
                 },
                 {
                     "command": "mdqda.themeManager.renameTheme",
                     "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
-                    "group": "1_manage@1"
+                    "group": "2_manage@1"
                 },
                 {
                     "command": "mdqda.themeManager.deleteTheme",
                     "when": "view == mdqda.themeManager && viewItem == mdqdaTheme",
-                    "group": "1_manage@2"
+                    "group": "2_manage@2"
                 }
             ]
         },

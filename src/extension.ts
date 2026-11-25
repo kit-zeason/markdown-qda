@@ -209,8 +209,9 @@ function pickMarkdownFile(source: vscode.Uri): Promise<vscode.Uri | undefined> {
 	});
 }
 
-// 把裸引用 [[文件#^id]] 追加到目标文档末尾（文件不存在则创建）
+// 把引用以列表项 - [[文件#^id]] 追加到目标文档末尾（文件不存在则创建）
 async function appendRefToFile(target: vscode.Uri, ref: string): Promise<void> {
+	const item = "- " + ref;
 	let exists = true;
 	try {
 		await vscode.workspace.fs.stat(target);
@@ -228,7 +229,7 @@ async function appendRefToFile(target: vscode.Uri, ref: string): Promise<void> {
 		}
 		await vscode.workspace.fs.writeFile(
 			target,
-			Buffer.from(ref + "\n", "utf8"),
+			Buffer.from(item + "\n", "utf8"),
 		);
 	} else {
 		const doc = await vscode.workspace.openTextDocument(target);
@@ -236,11 +237,11 @@ async function appendRefToFile(target: vscode.Uri, ref: string): Promise<void> {
 		const last = doc.lineAt(doc.lineCount - 1);
 		let insertText: string;
 		if (doc.lineCount === 1 && last.text === "") {
-			insertText = ref; // 空文件：直接写入
+			insertText = item; // 空文件：直接写入
 		} else if (last.text === "") {
-			insertText = ref + eol; // 文件末尾已有换行：补在末尾行
+			insertText = item + eol; // 文件末尾已有换行：补在末尾行
 		} else {
-			insertText = eol + ref + eol; // 末尾无换行：先换行再追加
+			insertText = eol + item + eol; // 末尾无换行：先换行再追加
 		}
 		const wsEdit = new vscode.WorkspaceEdit();
 		wsEdit.insert(target, last.range.end, insertText);

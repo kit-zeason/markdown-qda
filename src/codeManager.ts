@@ -9,7 +9,7 @@ import {
 	setFrontmatterList,
 } from "./parse";
 import type { ParsedRef } from "./parse";
-import { EXCLUDE_GLOB, snippetLabel } from "./library";
+import { EXCLUDE_GLOB } from "./library";
 import type { BlockRef, LibraryProvider } from "./library";
 
 export type CodeRef = ParsedRef; // [[note#^id]] 块引用
@@ -28,9 +28,20 @@ export interface CodeFile {
 	notes: Set<string>; // 覆盖的材料（去重）
 }
 
-export type CodeNode =
-	| { type: "code"; code: CodeFile; path: string }
-	| { type: "segment"; code: CodeFile; ref: CodeRef; path: string };
+// 树节点只表达实体结构：编码节点（块引用片段不再进树，ADR-0007）
+export interface CodeNode {
+	type: "code";
+	code: CodeFile;
+	path: string;
+	depth: number; // 0 = 顶层；1 = 展开出来的子实体（编码视图只展开一层）
+}
+
+// 灰色参数：块数（带单位）；顶层再追加直接子实体数
+export function countLabel(blocks: number, children = 0): string {
+	return children > 0
+		? vscode.l10n.t("{0} blocks · {1} children", blocks, children)
+		: vscode.l10n.t("{0} blocks", blocks);
+}
 
 async function readText(uri: vscode.Uri): Promise<string> {
 	return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
@@ -347,87 +358,38 @@ export class CodeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 				type: "code" as const,
 				code,
 				path: code.name,
+				depth: 0,
 			}));
 		}
-		if (node.type !== "code") {
-			return [];
-		}
-		// 子编码在前，片段在后；path 参与 TreeItem id，保证一处多挂时状态互不干扰
-		const kids = (this.childrenOf.get(node.code.name) ?? []).map((code) => ({
+		// 只显示子编码；块引用片段不进树（ADR-0007）。
+		// path 参与 TreeItem id，保证一处多挂时展开状态互不干扰
+		return (this.childrenOf.get(node.code.name) ?? []).map((code) => ({
 			type: "code" as const,
 			code,
 			path: `${node.path}/${code.name}`,
+			depth: node.depth + 1,
 		}));
-		const segs = node.code.refs.map((ref) => ({
-			type: "segment" as const,
-			code: node.code,
-			ref,
-			path: `${node.path}#${ref.raw}`,
-		}));
-		return [...kids, ...segs];
 	}
 
 	getTreeItem(node: CodeNode): vscode.TreeItem {
-		if (node.type === "code") {
-			const c = node.code;
-			const warning = this.treeWarnings.get(c.name);
-			const kids = this.childrenOf.get(c.name) ?? [];
-			const item = new vscode.TreeItem(
-				c.name,
-				kids.length > 0 || c.refs.length > 0
-					? vscode.TreeItemCollapsibleState.Collapsed
-					: vscode.TreeItemCollapsibleState.None,
-			);
-			item.id = node.path; // DAG：同一编码可在多处出现，id 必须含父路径
-			item.contextValue = "mdqdaCode";
-			item.iconPath = new vscode.ThemeIcon(warning ? "warning" : "symbol-key");
-			item.description =
-				vscode.l10n.t("{0} refs · {1} notes", c.refs.length, c.notes.size) +
-				(kids.length > 0
-					? " · " + vscode.l10n.t("{0} children", kids.length)
-					: "") +
-				(warning ? " ⚠" : "");
-			item.tooltip = codeTooltip(c, warning);
-			// 单击 = 打开该编码文件（重命名/删除在右键菜单）
-			item.command = {
-				command: "mdqda.codeManager.openCodeFile",
-				title: "",
-				arguments: [node],
-			};
-			return item;
-		}
-		// 片段节点
-		const ref = node.ref;
-		const resolved = this.resolveRef(ref);
+		const c = node.code;
+		const warning = this.treeWarnings.get(c.name);
+		const kids = this.childrenOf.get(c.name) ?? [];
+		const top = node.depth === 0; // 只展开一层，子编码恒为叶子
 		const item = new vscode.TreeItem(
-			resolved
-				? snippetLabel(resolved.text)
-				: vscode.l10n.t("Source not found: {0}", ref.raw),
-			vscode.TreeItemCollapsibleState.None,
+			c.name,
+			top && kids.length > 0
+				? vscode.TreeItemCollapsibleState.Collapsed
+				: vscode.TreeItemCollapsibleState.None,
 		);
-		item.contextValue = "mdqdaCodeSegment";
-		item.iconPath = new vscode.ThemeIcon("quote");
-		item.description = resolved
-			? `^${resolved.id} · ${resolved.file}`
-			: ref.note;
-		const tip = new vscode.MarkdownString();
-		if (resolved) {
-			tip.appendMarkdown(
-				vscode.l10n.t("**{0}** line {1}", resolved.file, resolved.line + 1) +
-					"\n\n",
-			);
-			tip.appendCodeblock(resolved.text.slice(0, 300), "markdown");
-		} else {
-			tip.appendMarkdown(
-				vscode.l10n.t(
-					"Cannot resolve {0} (the source file may have been deleted or the block ID is stale)",
-					ref.raw,
-				),
-			);
-		}
-		item.tooltip = tip;
+		item.id = node.path; // DAG：同一编码可在多处出现，id 必须含父路径
+		item.contextValue = "mdqdaCode";
+		item.iconPath = new vscode.ThemeIcon(warning ? "warning" : "symbol-key");
+		item.description = countLabel(c.refs.length, top ? kids.length : 0) + (warning ? " ⚠" : "");
+		item.tooltip = codeTooltip(c, warning);
+		// 单击 = 打开该编码文件（重命名/删除在右键菜单）
 		item.command = {
-			command: "mdqda.codeManager.revealSegment",
+			command: "mdqda.codeManager.openCodeFile",
 			title: "",
 			arguments: [node],
 		};
@@ -465,7 +427,7 @@ export class CodeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	}
 }
 
-function codeTooltip(c: CodeFile, warning?: string): vscode.MarkdownString {
+export function codeTooltip(c: CodeFile, warning?: string): vscode.MarkdownString {
 	const md = new vscode.MarkdownString();
 	md.appendMarkdown(
 		vscode.l10n.t(
@@ -488,55 +450,75 @@ export function registerCodeManagerCommands(
 	context: vscode.ExtensionContext,
 	provider: CodeManagerProvider,
 ): void {
+	// 新建编码；给 parent 时顺带把它写进该父编码的 children（「在此编码下新建子编码」）
+	const createCode = async (parent?: CodeFile): Promise<void> => {
+		const roots = vscode.workspace.workspaceFolders;
+		if (!roots || roots.length === 0) {
+			vscode.window.showWarningMessage(
+				vscode.l10n.t("No workspace folder is open"),
+			);
+			return;
+		}
+		const name = await vscode.window.showInputBox({
+			title: parent
+				? vscode.l10n.t("QDA: New Sub-code under “{0}”", parent.name)
+				: vscode.l10n.t("QDA: New Code"),
+			placeHolder: vscode.l10n.t("Code name (e.g. coding density)"),
+			validateInput: (v) =>
+				v && v.trim().length
+					? undefined
+					: vscode.l10n.t("Name cannot be empty"),
+		});
+		if (!name) {
+			return;
+		}
+		const newName = name.trim();
+		// 全工作区查重：文件名是块引用的主键，跨目录同名会导致解析歧义
+		const dup = await findDuplicateName(newName);
+		if (dup) {
+			vscode.window.showWarningMessage(
+				vscode.l10n.t("Code “{0}” already exists: {1}", newName, dup),
+			);
+			return;
+		}
+		const definition = await vscode.window.showInputBox({
+			title: vscode.l10n.t("Definition for “{0}”", newName),
+			placeHolder: vscode.l10n.t("One-line definition (optional)"),
+		});
+		const folder = await pickEntityFolder(vscode.l10n.t("QDA: New Code"));
+		if (folder === undefined) {
+			return;
+		}
+		const uri = vscode.Uri.joinPath(
+			roots[0].uri,
+			...(folder ? folder.split("/") : []),
+			newName + ".md",
+		);
+		const content = buildEntityFrontmatter(TAG_CODE, definition);
+		await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
+		if (parent) {
+			// 父端 children 声明成员；新文件刚落地，直接用父节点里已有的 children 追加
+			await writeEntityChildren(parent.uri, [...parent.children, newName]);
+		}
+		await provider.scan();
+	};
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand("mdqda.codeManager.refresh", () =>
 			provider.scan(),
 		),
-		vscode.commands.registerCommand("mdqda.codeManager.newCode", async () => {
-			const roots = vscode.workspace.workspaceFolders;
-			if (!roots || roots.length === 0) {
-				vscode.window.showWarningMessage(
-					vscode.l10n.t("No workspace folder is open"),
-				);
-				return;
-			}
-			const name = await vscode.window.showInputBox({
-				title: vscode.l10n.t("QDA: New Code"),
-				placeHolder: vscode.l10n.t("Code name (e.g. coding density)"),
-				validateInput: (v) =>
-					v && v.trim().length
-						? undefined
-						: vscode.l10n.t("Name cannot be empty"),
-			});
-			if (!name) {
-				return;
-			}
-			const newName = name.trim();
-			// 全工作区查重：文件名是块引用的主键，跨目录同名会导致解析歧义
-			const dup = await findDuplicateName(newName);
-			if (dup) {
-				vscode.window.showWarningMessage(
-					vscode.l10n.t("Code “{0}” already exists: {1}", newName, dup),
-				);
-				return;
-			}
-			const definition = await vscode.window.showInputBox({
-				title: vscode.l10n.t("Definition for “{0}”", newName),
-				placeHolder: vscode.l10n.t("One-line definition (optional)"),
-			});
-			const folder = await pickEntityFolder(vscode.l10n.t("QDA: New Code"));
-			if (folder === undefined) {
-				return;
-			}
-			const uri = vscode.Uri.joinPath(
-				roots[0].uri,
-				...(folder ? folder.split("/") : []),
-				newName + ".md",
-			);
-			const content = buildEntityFrontmatter(TAG_CODE, definition);
-			await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
-			await provider.scan();
-		}),
+		vscode.commands.registerCommand("mdqda.codeManager.newCode", () =>
+			createCode(),
+		),
+		vscode.commands.registerCommand(
+			"mdqda.codeManager.newChildCode",
+			async (node?: CodeNode) => {
+				if (node?.type !== "code") {
+					return;
+				}
+				await createCode(node.code);
+			},
+		),
 		vscode.commands.registerCommand(
 			"mdqda.codeManager.openCodeFile",
 			async (node?: CodeNode) => {
@@ -617,6 +599,29 @@ export function registerCodeManagerCommands(
 					useTrash: true,
 				});
 				await provider.scan();
+			},
+		),
+		// 编码 → 主题：只改 frontmatter tags，正文与块引用一字不动（父端 children 里的旧名保留，编码侧会标 ⚠）
+		vscode.commands.registerCommand(
+			"mdqda.codeManager.convertToTheme",
+			async (node?: CodeNode) => {
+				if (node?.type !== "code") {
+					return;
+				}
+				const convertLabel = vscode.l10n.t("Convert to Theme");
+				const pick = await vscode.window.showWarningMessage(
+					vscode.l10n.t(
+						"Convert “{0}” to a theme? Only the frontmatter `tags` changes — body and block references stay as they are.",
+						node.code.name,
+					),
+					{ modal: true },
+					convertLabel,
+				);
+				if (pick !== convertLabel) {
+					return;
+				}
+				await setTagsOnFile(node.code.uri, [TAG_THEME]);
+				await refreshViews();
 			},
 		),
 		vscode.commands.registerCommand(
@@ -700,43 +705,6 @@ export function registerCodeManagerCommands(
 					return;
 				}
 				await provider.mergeCode(from, pick.code);
-			},
-		),
-		vscode.commands.registerCommand(
-			"mdqda.codeManager.revealSegment",
-			async (node?: CodeNode) => {
-				if (node?.type !== "segment") {
-					return;
-				}
-				const resolved = provider.resolveRef(node.ref);
-				if (!resolved) {
-					vscode.window.showWarningMessage(
-						vscode.l10n.t(
-							"Cannot resolve {0} (the source file may have been deleted or the block ID is stale)",
-							node.ref.raw,
-						),
-					);
-					return;
-				}
-				const doc = await vscode.workspace.openTextDocument(resolved.uri);
-				const editor = await vscode.window.showTextDocument(doc, {
-					preview: true,
-				});
-				const rng = doc.lineAt(resolved.line).range;
-				editor.revealRange(rng, vscode.TextEditorRevealType.InCenter);
-				editor.selection = new vscode.Selection(rng.start, rng.end);
-			},
-		),
-		vscode.commands.registerCommand(
-			"mdqda.codeManager.copySegmentRef",
-			async (node?: CodeNode) => {
-				if (node?.type !== "segment") {
-					return;
-				}
-				await vscode.env.clipboard.writeText(node.ref.raw);
-				vscode.window.showInformationMessage(
-					vscode.l10n.t("Copied block reference: {0}", node.ref.raw),
-				);
 			},
 		),
 		vscode.commands.registerCommand("mdqda.codeManager.exportAnalysis", () =>
@@ -1091,113 +1059,148 @@ async function refreshViews(): Promise<void> {
 }
 
 // 把实体加入某个父实体的 children；编码可进编码/主题，主题只能进主题
+// 把编码加入某个父实体：kind 决定候选类型（code = 加进父编码，theme = 加进主题）
 export function registerEntityCommands(context: vscode.ExtensionContext): void {
+	const addToParent = async (
+		node: CodeNode | undefined,
+		kind: "code" | "theme",
+	): Promise<void> => {
+		if (node?.type !== "code") {
+			return;
+		}
+		const source = node.code;
+		// 主题不挂在任何实体下：主题只收录编码（ADR-0007）
+		if (source.tags.includes(TAG_THEME)) {
+			vscode.window.showInformationMessage(
+				vscode.l10n.t(
+					"“{0}” is a theme; themes cannot be a member of another entity",
+					source.name,
+				),
+			);
+			return;
+		}
+		const { codes, themes } = await scanQdaWorkspace();
+		const pool = kind === "theme" ? themes : codes;
+		const candidates = pool.filter((e) => e.name !== source.name);
+		if (candidates.length === 0) {
+			vscode.window.showInformationMessage(
+				vscode.l10n.t("No candidate parents available"),
+			);
+			return;
+		}
+		const pick = await vscode.window.showQuickPick(
+			candidates.map((e) => ({
+				label: e.name,
+				detail: e.definition,
+				entity: e,
+			})),
+			{
+				title:
+					kind === "theme"
+						? vscode.l10n.t("Add “{0}” to theme…", source.name)
+						: vscode.l10n.t("Add “{0}” to code…", source.name),
+				matchOnDetail: true,
+			},
+		);
+		if (!pick) {
+			return;
+		}
+		const target = pick.entity;
+		if (target.children.includes(source.name)) {
+			vscode.window.showInformationMessage(
+				vscode.l10n.t(
+					"“{0}” is already a child of “{1}”",
+					source.name,
+					target.name,
+				),
+			);
+			return;
+		}
+		const childrenOf = new Map<string, string[]>();
+		for (const e of [...codes, ...themes]) {
+			childrenOf.set(e.name, e.children);
+		}
+		if (
+			wouldCreateCycle(source.name, target.name, (n) => childrenOf.get(n) ?? [])
+		) {
+			vscode.window.showWarningMessage(
+				vscode.l10n.t(
+					"Cannot add “{0}” under “{1}”: this would create a cycle",
+					source.name,
+					target.name,
+				),
+			);
+			return;
+		}
+		await writeEntityChildren(target.uri, [...target.children, source.name]);
+		await refreshViews();
+	};
+
 	context.subscriptions.push(
 		vscode.commands.registerCommand(
-			"mdqda.entity.addToParent",
-			async (node?: CodeNode) => {
-				if (node?.type !== "code") {
-					return;
-				}
-				const source = node.code;
-				const isTheme = source.tags.includes(TAG_THEME);
-				const { codes, themes } = await scanQdaWorkspace();
-				const candidates = [...codes, ...themes].filter(
-					(e) =>
-						e.name !== source.name &&
-						(isTheme ? e.tags.includes(TAG_THEME) : true),
-				);
-				if (candidates.length === 0) {
-					vscode.window.showInformationMessage(
-						vscode.l10n.t("No candidate parents available"),
-					);
-					return;
-				}
-				const pick = await vscode.window.showQuickPick(
-					candidates.map((e) => ({
-						label: e.name,
-						description: e.tags.includes(TAG_THEME)
-							? vscode.l10n.t("theme")
-							: vscode.l10n.t("code"),
-						detail: e.definition,
-						entity: e,
-					})),
-					{
-						title: vscode.l10n.t("Add “{0}” to parent…", source.name),
-						matchOnDescription: true,
-					},
-				);
-				if (!pick) {
-					return;
-				}
-				const target = pick.entity;
-				if (target.children.includes(source.name)) {
-					vscode.window.showInformationMessage(
-						vscode.l10n.t("“{0}” is already a child of “{1}”", source.name, target.name),
-					);
-					return;
-				}
-				const childrenOf = new Map<string, string[]>();
-				for (const e of [...codes, ...themes]) {
-					childrenOf.set(e.name, e.children);
-				}
-				if (
-					wouldCreateCycle(
-						source.name,
-						target.name,
-						(n) => childrenOf.get(n) ?? [],
-					)
-				) {
-					vscode.window.showWarningMessage(
-						vscode.l10n.t(
-							"Cannot add “{0}” under “{1}”: this would create a cycle",
-							source.name,
-							target.name,
-						),
-					);
-					return;
-				}
-				await writeEntityChildren(target.uri, [...target.children, source.name]);
-				await refreshViews();
-			},
+			"mdqda.entity.addToCode",
+			async (node?: CodeNode) => addToParent(node, "code"),
 		),
 		vscode.commands.registerCommand(
-			"mdqda.entity.removeFromParent",
-			async (node?: CodeNode) => {
-				if (node?.type !== "code") {
-					return;
-				}
-				const source = node.code;
-				const { codes, themes } = await scanQdaWorkspace();
-				const parents = [...codes, ...themes].filter((e) =>
-					e.children.includes(source.name),
-				);
-				if (parents.length === 0) {
-					vscode.window.showInformationMessage(
-						vscode.l10n.t("“{0}” has no parent", source.name),
-					);
-					return;
-				}
-				const pick = await vscode.window.showQuickPick(
-					parents.map((e) => ({
-						label: e.name,
-						description: e.tags.includes(TAG_THEME)
-							? vscode.l10n.t("theme")
-							: vscode.l10n.t("code"),
-						detail: e.definition,
-						entity: e,
-					})),
-					{ title: vscode.l10n.t("Remove “{0}” from…", source.name) },
-				);
-				if (!pick) {
-					return;
-				}
-				await writeEntityChildren(
-					pick.entity.uri,
-					pick.entity.children.filter((n) => n !== source.name),
-				);
-				await refreshViews();
+			"mdqda.entity.addToTheme",
+			async (node?: CodeNode) => addToParent(node, "theme"),
+		),
+	);
+
+	// 把编码从父实体移出；kind = "theme" 时只在主题里找（主题视图的「从主题移出」）
+	const removeFromParent = async (
+		node: CodeNode | undefined,
+		kind?: "theme",
+	): Promise<void> => {
+		if (node?.type !== "code") {
+			return;
+		}
+		const source = node.code;
+		const { codes, themes } = await scanQdaWorkspace();
+		const pool = kind === "theme" ? themes : [...codes, ...themes];
+		const parents = pool.filter((e) => e.children.includes(source.name));
+		if (parents.length === 0) {
+			vscode.window.showInformationMessage(
+				kind === "theme"
+					? vscode.l10n.t("“{0}” is in no theme", source.name)
+					: vscode.l10n.t("“{0}” has no parent", source.name),
+			);
+			return;
+		}
+		const pick = await vscode.window.showQuickPick(
+			parents.map((e) => ({
+				label: e.name,
+				description: e.tags.includes(TAG_THEME)
+					? vscode.l10n.t("theme")
+					: vscode.l10n.t("code"),
+				detail: e.definition,
+				entity: e,
+			})),
+			{
+				title:
+					kind === "theme"
+						? vscode.l10n.t("Remove “{0}” from theme…", source.name)
+						: vscode.l10n.t("Remove “{0}” from…", source.name),
 			},
+		);
+		if (!pick) {
+			return;
+		}
+		await writeEntityChildren(
+			pick.entity.uri,
+			pick.entity.children.filter((n) => n !== source.name),
+		);
+		await refreshViews();
+	};
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand(
+			"mdqda.entity.removeFromParent",
+			async (node?: CodeNode) => removeFromParent(node),
+		),
+		vscode.commands.registerCommand(
+			"mdqda.entity.removeFromTheme",
+			async (node?: CodeNode) => removeFromParent(node, "theme"),
 		),
 		vscode.commands.registerCommand("mdqda.migrate.parentToChildren", () =>
 			migrateLegacyParent(),

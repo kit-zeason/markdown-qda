@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
-import { buildEntityFrontmatter, buildEntityGraph } from "./parse";
+import { buildEntityFrontmatter } from "./parse";
 import {
 	type CodeFile,
 	type CodeNode,
 	TAG_THEME,
+	codeTooltip,
+	countLabel,
 	defineEntities,
 	findDuplicateName,
 	pickEntityFolder,
@@ -13,7 +15,7 @@ import {
 import type { LibraryProvider } from "./library";
 
 // 主题管理视图：显示 tags 含 theme 的实体。
-// 关系与编码共用同一套 children（父端声明成员）机制，主题的成员可以是编码或子主题。
+// 主题平铺不嵌套；theme 的 children 是它收录的编码，按下展开即列出这些编码（ADR-0007）。
 export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	private readonly _onDidChangeTreeData = new vscode.EventEmitter<
 		CodeNode | undefined | void
@@ -21,9 +23,9 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
 	private themes: CodeFile[] = [];
-	private roots: CodeFile[] = [];
-	private childrenOf = new Map<string, CodeFile[]>(); // 子主题
-	private codeCount = new Map<string, number>(); // 主题名 → 直接收录的编码数
+	private codesByName = new Map<string, CodeFile>(); // 实体名 → 编码（用于把 children 解析成编码节点）
+	private childrenOf = new Map<string, CodeFile[]>(); // 主题名 → 直接收录的编码
+	private codeChildren = new Map<string, number>(); // 编码名 → 它自己的子编码数（灰色参数用）
 	private treeWarnings = new Map<string, string>();
 	private scanChain: Promise<void> | undefined;
 	private scanQueued = false;
@@ -39,7 +41,7 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 		return this.themes;
 	}
 
-	childThemes(theme: CodeFile): CodeFile[] {
+	childCodes(theme: CodeFile): CodeFile[] {
 		return this.childrenOf.get(theme.name) ?? [];
 	}
 
@@ -65,34 +67,41 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	private async doScan(): Promise<void> {
 		const { codes, themes, legacy } = await scanQdaWorkspace();
 		this.themes = themes;
-		const codeNames = new Set(codes.map((c) => c.name));
-		const allNames = new Set([...codeNames, ...themes.map((t) => t.name)]);
-		// 主题图：成员可以是编码（不计入树）或子主题（递归展开）
-		const graph = buildEntityGraph(themes, allNames);
-		const byName = new Map(themes.map((t) => [t.name, t]));
-		this.roots = graph.roots
-			.map((n) => byName.get(n))
-			.filter((t): t is CodeFile => t !== undefined);
+		this.codesByName = new Map(codes.map((c) => [c.name, c]));
 		this.childrenOf = new Map();
-		this.codeCount = new Map();
-		for (const t of themes) {
-			this.childrenOf.set(
-				t.name,
-				(t.children
-					.map((n) => byName.get(n))
-					.filter((x): x is CodeFile => x !== undefined)),
-			);
-			this.codeCount.set(
-				t.name,
-				t.children.filter((n) => codeNames.has(n)).length,
+		this.codeChildren = new Map();
+		this.treeWarnings = new Map();
+		// 编码自己的子编码数（灰色参数用，只统计能解析成编码的名字）
+		for (const c of codes) {
+			this.codeChildren.set(
+				c.name,
+				c.children.filter((n) => this.codesByName.has(n)).length,
 			);
 		}
-		this.treeWarnings = new Map(
-			[...graph.warnings].map(([name, w]) => [
-				name,
-				vscode.l10n.t(w.template, ...w.args),
-			]),
-		);
+		// theme 的 children 一律按编码解析；解析不到（主题 / 悬空 / 材料）不展开、标 ⚠
+		for (const t of themes) {
+			const kids: CodeFile[] = [];
+			const ignored: string[] = [];
+			for (const n of t.children) {
+				const c = this.codesByName.get(n);
+				if (c) {
+					kids.push(c);
+				} else {
+					ignored.push(n);
+				}
+			}
+			this.childrenOf.set(t.name, kids);
+			if (ignored.length > 0) {
+				this.treeWarnings.set(
+					t.name,
+					vscode.l10n.t(
+						"Ignored (not a code): {0} — change its tags to `code`, or remove it from children",
+						ignored.join(", "),
+					),
+				);
+			}
+		}
+		// 旧 parent 字段残留：不静默丢层级，标 ⚠ 提示跑迁移
 		const legacySet = new Set(legacy);
 		for (const t of themes) {
 			if (legacySet.has(t.name) && !this.treeWarnings.has(t.name)) {
@@ -113,33 +122,51 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 	}
 
 	getChildren(node?: CodeNode): CodeNode[] {
+		// 主题平铺：主题之间没有层级，全部是根节点（ADR-0007）
 		if (!node) {
-			return this.roots.map((t) => ({
+			return this.themes.map((t) => ({
 				type: "code" as const,
 				code: t,
 				path: t.name,
+				depth: 0,
 			}));
 		}
-		if (node.type !== "code") {
-			return [];
-		}
-		return (this.childrenOf.get(node.code.name) ?? []).map((t) => ({
+		// 展开 = 该主题收录的编码；编码是叶子，不再下钻其子编码
+		return (this.childrenOf.get(node.code.name) ?? []).map((c) => ({
 			type: "code" as const,
-			code: t,
-			path: `${node.path}/${t.name}`,
+			code: c,
+			path: `${node.path}/${c.name}`,
+			depth: node.depth + 1,
 		}));
 	}
 
 	getTreeItem(node: CodeNode): vscode.TreeItem {
-		if (node.type !== "code") {
-			return new vscode.TreeItem("");
+		const c = node.code;
+		const warning = this.treeWarnings.get(c.name);
+		// 主题下收录的编码：单击打开编码文件，块引用在文件里看
+		if (!c.tags.includes(TAG_THEME)) {
+			const item = new vscode.TreeItem(
+				c.name,
+				vscode.TreeItemCollapsibleState.None,
+			);
+			item.id = node.path;
+			item.contextValue = "mdqdaCode";
+			item.iconPath = new vscode.ThemeIcon("symbol-key");
+			item.description = countLabel(
+				c.refs.length,
+				this.codeChildren.get(c.name) ?? 0,
+			);
+			item.tooltip = codeTooltip(c);
+			item.command = {
+				command: "mdqda.codeManager.openCodeFile",
+				title: "",
+				arguments: [node],
+			};
+			return item;
 		}
-		const t = node.code;
-		const warning = this.treeWarnings.get(t.name);
-		const kids = this.childrenOf.get(t.name) ?? [];
-		const codes = this.codeCount.get(t.name) ?? 0;
+		const kids = this.childrenOf.get(c.name) ?? [];
 		const item = new vscode.TreeItem(
-			t.name,
+			c.name,
 			kids.length > 0
 				? vscode.TreeItemCollapsibleState.Collapsed
 				: vscode.TreeItemCollapsibleState.None,
@@ -148,12 +175,8 @@ export class ThemeManagerProvider implements vscode.TreeDataProvider<CodeNode> {
 		item.contextValue = "mdqdaTheme";
 		item.iconPath = new vscode.ThemeIcon(warning ? "warning" : "symbol-misc");
 		item.description =
-			(kids.length > 0
-				? vscode.l10n.t("{0} subthemes", kids.length) + " · "
-				: "") +
-			vscode.l10n.t("{0} codes", codes) +
-			(warning ? " ⚠" : "");
-		item.tooltip = themeTooltip(t, warning, codes);
+			vscode.l10n.t("{0} codes", kids.length) + (warning ? " ⚠" : "");
+		item.tooltip = themeTooltip(c, warning, kids.length);
 		// 单击 = 打开主题文件（复用编码文件的打开命令，参数同为 CodeNode）
 		item.command = {
 			command: "mdqda.codeManager.openCodeFile",
@@ -282,7 +305,7 @@ export function registerThemeManagerCommands(
 				if (node?.type !== "code") {
 					return;
 				}
-				const kidsCount = provider.childThemes(node.code).length;
+				const kidsCount = provider.childCodes(node.code).length;
 				const deleteLabel = vscode.l10n.t("Delete");
 				const pick = await vscode.window.showWarningMessage(
 					vscode.l10n.t(
@@ -291,7 +314,7 @@ export function registerThemeManagerCommands(
 					) +
 						(kidsCount > 0
 							? vscode.l10n.t(
-									"Its {0} child themes will lose their parent and appear at the root level.",
+									"Its {0} codes stay untouched; they just leave this theme.",
 									kidsCount,
 								)
 							: ""),

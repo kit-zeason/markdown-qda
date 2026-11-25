@@ -295,7 +295,7 @@ export class LibraryProvider implements vscode.TreeDataProvider<LibraryNode> {
 		);
 		item.contextValue = "mdqdaSnippet";
 		item.iconPath = new vscode.ThemeIcon("quote");
-		item.description = `^${ref.id} · ${ref.file}`;
+		item.description = `^${ref.id}`;
 		item.tooltip = snippetTooltip(ref);
 		item.command = {
 			command: "mdqda.blockRefLibrary.revealSnippet",
